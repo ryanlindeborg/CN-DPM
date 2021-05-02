@@ -11,6 +11,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
     """ A Neural Dirichlet Process Mixture Model for Task-Free Continual Learning
     
     https://arxiv.org/abs/2001.00689
+    test submodule
     """
     
     def __init__(self, learning_rate: float = 3e-4):
