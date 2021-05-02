@@ -18,14 +18,10 @@ label_offset:
 # Model #
 #########
 
-x_c: 1
-x_h: 28
-x_w: 28
-y_c: 10
-
 device: 'cuda'
-
 model_name: 'ndpm_model'
+log_dir: 'logs'
+
 g: 'mlp_sharing_vae'
 d: 'mlp_sharing_classifier'
 disable_d: False

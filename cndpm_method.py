@@ -2,6 +2,8 @@ import gym
 import yaml
 from typing import Tuple
 from typing import ClassVar, Type
+from tensorboardX import SummaryWriter
+from argparse import ArgumentParser
 
 from sequoia.methods import Method
 from sequoia.settings import Setting, Environment
@@ -34,32 +36,34 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
             setting (SettingType): The setting the method will be evaluated on.
         """
         print(f"Observations space: {setting.observation_space}")
-        image_size: Tuple[int, ...] = setting.observation_space.x.shape
-        print(f"image_size: {image_size}")
-        number_of_tasks = setting.nb_tasks
-        print(f"Number of tasks: {number_of_tasks}")
-        # TODO: Create the Model, using the image shape, the number of tasks (if that
-        # makes sense), etc.
         # Create config from setting variable, to pass into model when initialize
         config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
-        # TODO Set dimensions of input and output: x_c: 1
-        # x_h: 28
-        # x_w: 28
-        # y_c: 10
-        # TODO: Maybe delete and set all properties of model manually
+        # Observation space is tuple consisting of number of channels, height of image, width of image
+        image_size: Tuple[int, ...] = setting.observation_space.x.shape
+        print(f"image_size: {image_size}")
+        x_c, x_h, x_w = image_size
+        config["x_c"] = x_c
+        config["x_h"] = x_h
+        config["x_w"] = x_w
+
+        number_of_tasks = setting.nb_tasks
+        print(f"Number of tasks: {number_of_tasks}")
+        config["y_c"] = number_of_tasks
+
+        writer = SummaryWriter(config['log_dir'])
         self.model = self.ModelType(
-            #observation_space=setting.observation_space,
-            #action_space=setting.action_space,
-            #reward_space=setting.reward_space,
             config,
-            writer: SummaryWriter
+            writer,
         )
+        self.model.to(config['device'])
 
     def fit(self, train_env: Environment, valid_env: Environment):
         """Called by the Setting to give the method data to train with.
         
         Might be called more than once before training is 'complete'.
         """
+        # data_scheduler = DataScheduler(config)
+        # train_model(config, model, data_scheduler, writer)
         raise NotImplementedError("TODO: Train the model on the data from the environments.") 
     
     def get_actions(self,
@@ -70,10 +74,28 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         """
         pass
 
+    @classmethod
+    def add_argparse_args(cls, parser: ArgumentParser, dest: str = "") -> None:
+        """Add the command-line arguments for this Method to the given parser.
+
+        Parameters
+        ----------
+        parser : ArgumentParser
+            The ArgumentParser.
+        dest : str, optional
+            The 'base' destination where the arguments should be set on the
+            namespace, by default empty, in which case the arguments can be at
+            the "root" level on the namespace.
+        """
+        prefix = f"{dest}." if dest else ""
+        parser.add_argument(f"--{prefix}log_dir", type=str, default="logs")
+
+
+
 
 if __name__ == "__main__":
     from sequoia.settings.passive import ClassIncrementalSetting
-    setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)    
+    setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)
     method = CNDPM()
 
     results = setting.apply(method)
