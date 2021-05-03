@@ -1,26 +1,10 @@
 import os
 import pickle
 import torch
-from tensorboardX import SummaryWriter
 from models import NdpmModel
 from data import DataScheduler
 
 from sequoia.settings import Environment
-
-
-def _write_summary(summary, writer: SummaryWriter, step):
-    for summary_type, summary_dict in summary.items():
-        if summary_type == 'scalar':
-            write_fn = writer.add_scalar
-        elif summary_type == 'image':
-            write_fn = writer.add_image
-        elif summary_type == 'histogram':
-            write_fn = writer.add_histogram
-        else:
-            raise RuntimeError('Unsupported summary type: %s' % summary_type)
-
-        for tag, value in summary_dict.items():
-            write_fn(tag, value, step)
 
 
 def _make_collage(samples, config, grid_h, grid_w):
@@ -48,8 +32,7 @@ def train_model_with_sequoia_env(config, model: NdpmModel, sequoia_env: Environm
         model.learn(x, y, t, step)
 
 def train_model(config, model: NdpmModel,
-                scheduler: DataScheduler,
-                writer: SummaryWriter):
+                scheduler: DataScheduler):
     for step, (x, y, t) in enumerate(scheduler):
         step += 1
         if isinstance(model, NdpmModel):
@@ -73,7 +56,7 @@ def train_model(config, model: NdpmModel,
             not isinstance(model, NdpmModel) or len(model.ndpm.experts) > 1
         )
         if evaluatable and step % config['eval_step'] == 0:
-            scheduler.eval(model, writer, step, 'model')
+            scheduler.eval(model, None, step, 'model')
 
         # Evaluate experts of the model's DPMoE
         if summarize_experts:

@@ -1,5 +1,4 @@
 import yaml
-from tensorboardX import SummaryWriter
 import torch
 from torch import nn
 from ndpm import Ndpm
@@ -7,9 +6,9 @@ from .base import Model
 
 
 class NdpmModel(Model):
-    def __init__(self, config, writer: SummaryWriter):
-        super().__init__(config, writer)
-        self.ndpm = Ndpm(config, writer)
+    def __init__(self, config):
+        super().__init__(config)
+        self.ndpm = Ndpm(config)
         self.extractor = None
 
     def forward(self, x, expert_index=None, return_assignments=False):
@@ -22,12 +21,3 @@ class NdpmModel(Model):
     def learn(self, x, y, t, step=None):
         x, y = x.to(self.device), y.to(self.device)
         self.ndpm.learn(x, y, step)
-
-        if step % self.config['summary_step'] == 0:
-            self.writer.add_scalar(
-                'num_params', sum([
-                    p.numel()
-                    for e in self.ndpm.experts[1:]
-                    for p in e.parameters()
-                ]), step
-            )

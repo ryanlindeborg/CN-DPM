@@ -20,7 +20,6 @@ label_offset:
 
 device: 'cuda'
 model_name: 'ndpm_model'
-log_dir: 'logs'
 
 g: 'mlp_sharing_vae'
 d: 'mlp_sharing_classifier'

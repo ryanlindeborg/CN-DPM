@@ -1,4 +1,3 @@
-from tensorboardX import SummaryWriter
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler
@@ -7,7 +6,7 @@ from .priors import CumulativePrior
 
 
 class Ndpm(nn.Module):
-    def __init__(self, config, writer: SummaryWriter):
+    def __init__(self, config):
         super().__init__()
         self.config = config
         self.experts = nn.ModuleList([Expert(config)])
@@ -17,7 +16,6 @@ class Ndpm(nn.Module):
         self.stm_next_erase = config['stm_erase_period']
         self.prior = CumulativePrior(config)
         self.device = config['device'] if 'device' in config else 'cuda'
-        self.writer = writer
 
     def get_experts(self):
         return tuple(self.experts.children())
@@ -56,32 +54,12 @@ class Ndpm(nn.Module):
                 nll.size(0), -1)  # [B, 1+K]
 
             if summarize:
-                for i, summary in enumerate(summaries):
-                    summary.write(self.writer, step, postfix='/{}'.format(i))
+                # for i, summary in enumerate(summaries):
+                #     summary.write(self.writer, step, postfix='/{}'.format(i))
 
                 mean_nl_joint = nl_joint.detach().mean(dim=0)
                 if len(self.experts) > 1:
                     nl_joint_ndpm = nl_joint.detach()[:, 1:].min(dim=1)[0]
-                    self.writer.add_scalar(
-                        'nl_joint/ndpm/max', nl_joint_ndpm.max(dim=0)[0], step)
-                    self.writer.add_scalar(
-                        'nl_joint/ndpm/mean', nl_joint_ndpm.mean(dim=0), step)
-                for k, expert in enumerate(self.experts):
-                    self.writer.add_scalar(
-                        'data counts per expert/%s' % expert.id,
-                        self.prior.counts[k], step)
-                    self.writer.add_scalar(
-                        'nl_prior/%s' % expert.id, nl_prior[k], step)
-                    self.writer.add_scalar(
-                        'nl_joint/%s' % expert.id, mean_nl_joint[k], step)
-                    self.writer.add_histogram(
-                        'nl_joint_dist/%s' % expert.id, nl_joint[:, k], step)
-                    self.writer.add_scalar(
-                        'nl_cond/%s' % expert.id,
-                        mean_nl_joint[k] - nl_prior[k], step)
-                    self.writer.add_histogram(
-                        'nl_cond_dist/%s' % expert.id,
-                        nl_joint[:, k] - nl_prior[k], step)
 
             # Save to short-term memory
             destination = torch.argmin(nl_joint, dim=1).to(self.device)  # [B]
@@ -195,9 +173,9 @@ class Ndpm(nn.Module):
             expert.g.optimizer.step()
 
             if step % self.config['sleep_summary_step'] == 0:
-                g_summary.write(
-                    self.writer, step,
-                    prefix='sleep_g_', postfix='/{}'.format(expert.id))
+                # g_summary.write(
+                #     self.writer, step,
+                #     prefix='sleep_g_', postfix='/{}'.format(expert.id))
                 print('\r   [Sleep-G %6d] loss: %5.1f' % (
                     step, g_loss.mean()
                 ), end='')
@@ -208,9 +186,9 @@ class Ndpm(nn.Module):
                             dream_val_x)
                     val_summary_g.add_tensor_summary(
                         'loss/total', val_loss_g, 'histogram')
-                    val_summary_g.write(self.writer, step,
-                                        prefix='sleep_val_g_',
-                                        postfix='/{}'.format(expert.id))
+                    # val_summary_g.write(self.writer, step,
+                    #                     prefix='sleep_val_g_',
+                    #                     postfix='/{}'.format(expert.id))
         print()
 
         dream_iterator = iter(DataLoader(
@@ -240,9 +218,9 @@ class Ndpm(nn.Module):
                 expert.d.optimizer.step()
 
                 if step % self.config['sleep_summary_step'] == 0:
-                    d_summary.write(
-                        self.writer, step,
-                        prefix='sleep_d_', postfix='/{}'.format(expert.id))
+                    # d_summary.write(
+                    #     self.writer, step,
+                    #     prefix='sleep_d_', postfix='/{}'.format(expert.id))
                     print('\r   [Sleep-D %6d] loss: %5.1f' % (
                         step, d_loss.mean()
                     ), end='')
@@ -251,8 +229,6 @@ class Ndpm(nn.Module):
                     with torch.no_grad():
                         pred = expert(x).argmax(1)
                     acc = (pred == y).float().mean()
-                    self.writer.add_scalar(
-                        'sleep_d_accuracy/%d' % expert.id, acc, step)
 
                     if self.config['sleep_val_size'] != 0:
                         with torch.no_grad():
@@ -260,16 +236,14 @@ class Ndpm(nn.Module):
                                 dream_val_x, dream_val_y)
                         val_summary_d.add_tensor_summary(
                             'loss/total', val_loss_d.mean(), 'scalar')
-                        val_summary_d.write(self.writer, step,
-                                            prefix='sleep_val_d',
-                                            postfix='/{}'.format(expert.id))
+                        # val_summary_d.write(self.writer, step,
+                        #                     prefix='sleep_val_d',
+                        #                     postfix='/{}'.format(expert.id))
 
                         # Validation accuracy
                         with torch.no_grad():
                             pred = expert(dream_val_x).argmax(1)
                         acc = (pred.cpu() == dream_val_y).float().mean()
-                        self.writer.add_scalar(
-                            'sleep_val_d_accuracy/%d' % expert.id, acc, step)
 
         expert.lr_scheduler_step()
         expert.lr_scheduler_step()

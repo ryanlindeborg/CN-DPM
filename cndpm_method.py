@@ -2,7 +2,6 @@ import gym
 import yaml
 from typing import Tuple
 from typing import ClassVar, Type
-from tensorboardX import SummaryWriter
 from argparse import ArgumentParser
 
 from sequoia.methods import Method
@@ -52,10 +51,8 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         print(f"Number of tasks: {number_of_tasks}")
         config["y_c"] = number_of_tasks
 
-        writer = SummaryWriter(config['log_dir'])
         self.model = self.ModelType(
             config,
-            writer,
         )
         self.model.to(config['device'])
 
@@ -68,7 +65,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         # data_scheduler = DataScheduler(config)
 
         # Train loop
-        train_model(config, self.model, data_scheduler, self.model.writer)
+        train_model(config, self.model, data_scheduler)
         # Validaton loop
 
         # raise NotImplementedError("TODO: Train the model on the data from the environments.")
