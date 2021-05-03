@@ -10,6 +10,8 @@ from sequoia.settings import Setting, Environment
 from sequoia.settings.passive import PassiveSetting, PassiveEnvironment, ClassIncrementalSetting
 
 from models.ndpm_model import NdpmModel
+from train import train_model
+from validate import validate_model
 
 CNDPM_YAML_PATH = './sequoia/methods/cn_dpm/configs/cndpm.yaml'
 
@@ -36,7 +38,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
             setting (SettingType): The setting the method will be evaluated on.
         """
         print(f"Observations space: {setting.observation_space}")
-        # Create config from setting variable, to pass into model when initialize
+        # Load config, to pass into model when initialize
         config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
         # Observation space is tuple consisting of number of channels, height of image, width of image
         image_size: Tuple[int, ...] = setting.observation_space.x.shape
@@ -62,9 +64,14 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         
         Might be called more than once before training is 'complete'.
         """
+        config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
         # data_scheduler = DataScheduler(config)
-        # train_model(config, model, data_scheduler, writer)
-        raise NotImplementedError("TODO: Train the model on the data from the environments.") 
+
+        # Train loop
+        train_model(config, self.model, data_scheduler, self.model.writer)
+        # Validaton loop
+
+        # raise NotImplementedError("TODO: Train the model on the data from the environments.")
     
     def get_actions(self,
                     observations: ClassIncrementalSetting.Observations,

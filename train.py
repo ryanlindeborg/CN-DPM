@@ -5,6 +5,8 @@ from tensorboardX import SummaryWriter
 from models import NdpmModel
 from data import DataScheduler
 
+from sequoia.settings import Environment
+
 
 def _write_summary(summary, writer: SummaryWriter, step):
     for summary_type, summary_dict in summary.items():
@@ -33,6 +35,17 @@ def _make_collage(samples, config, grid_h, grid_w):
     )
     return collage
 
+def train_model_with_sequoia_env(config, model: NdpmModel, sequoia_env: Environment):
+    for step, (x, y, t) in enumerate(sequoia_env):
+        step += 1
+        print('\r[Step {:4}] STM: {:5}/{} | #Expert: {}'.format(
+            step,
+            len(model.ndpm.stm_x), config['stm_capacity'],
+            len(model.ndpm.experts) - 1
+        ), end='')
+
+        # learn the model
+        model.learn(x, y, t, step)
 
 def train_model(config, model: NdpmModel,
                 scheduler: DataScheduler,
