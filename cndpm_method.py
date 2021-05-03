@@ -9,7 +9,7 @@ from sequoia.settings import Setting, Environment
 from sequoia.settings.passive import PassiveSetting, PassiveEnvironment, ClassIncrementalSetting
 
 from models.ndpm_model import NdpmModel
-from train import train_model
+from train import train_model_with_sequoia_env
 from validate import validate_model
 
 CNDPM_YAML_PATH = './sequoia/methods/cn_dpm/configs/cndpm.yaml'
@@ -65,7 +65,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         # data_scheduler = DataScheduler(config)
 
         # Train loop
-        train_model(config, self.model, data_scheduler)
+        train_model_with_sequoia_env(config, self.model, train_env)
         # Validaton loop
 
         # raise NotImplementedError("TODO: Train the model on the data from the environments.")

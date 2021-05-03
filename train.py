@@ -20,6 +20,7 @@ def _make_collage(samples, config, grid_h, grid_w):
     return collage
 
 def train_model_with_sequoia_env(config, model: NdpmModel, sequoia_env: Environment):
+    model.train()
     for step, (x, y, t) in enumerate(sequoia_env):
         step += 1
         print('\r[Step {:4}] STM: {:5}/{} | #Expert: {}'.format(
@@ -33,6 +34,7 @@ def train_model_with_sequoia_env(config, model: NdpmModel, sequoia_env: Environm
 
 def train_model(config, model: NdpmModel,
                 scheduler: DataScheduler):
+    model.train()
     for step, (x, y, t) in enumerate(scheduler):
         step += 1
         if isinstance(model, NdpmModel):
@@ -59,8 +61,8 @@ def train_model(config, model: NdpmModel,
             scheduler.eval(model, None, step, 'model')
 
         # Evaluate experts of the model's DPMoE
-        if summarize_experts:
-            writer.add_scalar('num_experts', len(model.ndpm.experts) - 1, step)
+        # if summarize_experts:
+        #     writer.add_scalar('num_experts', len(model.ndpm.experts) - 1, step)
 
         # Summarize samples
         if summarize_samples:
@@ -77,7 +79,7 @@ def train_model(config, model: NdpmModel,
                     samples = expert.sample(grid_h * grid_w)
                 total_samples.append(samples)
                 collage = _make_collage(samples, config, grid_h, grid_w)
-                writer.add_image('samples/{}'.format(i + 1), collage, step)
+                # writer.add_image('samples/{}'.format(i + 1), collage, step)
 
             if is_ndpm:
                 counts = model.ndpm.prior.counts[1:]
@@ -89,4 +91,4 @@ def train_model(config, model: NdpmModel,
                     to_collage.append(samples[:num_samples[i]])
                 to_collage = torch.cat(to_collage, dim=0)
                 collage = _make_collage(to_collage, config, grid_h, grid_w)
-                writer.add_image('samples/ndpm', collage, step)
+                # writer.add_image('samples/ndpm', collage, step)
