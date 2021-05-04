@@ -6,7 +6,7 @@ def validate_model(config, model: NdpmModel, sequoia_env: Environment):
     model.eval()
     for step, (x, y, t) in enumerate(sequoia_env):
         step += 1
-        sequoia_env.eval(model, None, step, 'model')
+        model.evaluate_model(sequoia_env, step, 'model')
 
     """
     Existing DataScheduler eval loop through datasets:
