@@ -1,7 +1,7 @@
 import yaml
 import torch
 from torch import nn
-from ndpm import Ndpm
+from ..ndpm.ndpm import Ndpm
 from .base import Model
 
 
