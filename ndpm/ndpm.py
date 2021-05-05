@@ -6,6 +6,9 @@ from .priors import CumulativePrior
 
 from sequoia.settings import Environment
 
+from functools import reduce
+import math
+
 
 class Ndpm(nn.Module):
     def __init__(self, config):
@@ -267,11 +270,10 @@ class Ndpm(nn.Module):
         if self.config['eval_d']:
             self._eval_discriminative_model(sequoia_env, step)
         if self.config['eval_g']:
-            self._eval_generative_model(model, step, eval_title)
+            self._eval_generative_model(sequoia_env, step)
         if 'eval_t' in self.config and self.config['eval_t']:
             self._eval_hard_assign(
-                model, step, eval_title,
-                task_index=task_index
+                sequoia_env, step
             )
 
     def _eval_discriminative_model(
@@ -286,7 +288,6 @@ class Ndpm(nn.Module):
         corrects_1 = []
         corrects_k = []
 
-        # TODO: Figure out how to get class subsets from sequoia environment
         # Accuracy of each subset
         total = 0.
         correct_1 = 0.
@@ -320,54 +321,48 @@ class Ndpm(nn.Module):
 
     def _eval_generative_model(
             self,
-            model: Model,
-            step, eval_title):
+            sequoia_env: Environment,
+            step):
         # change the model to eval mode
-        training = model.training
-        z_samples = model.config['z_samples']
-        model.eval()
-        model.config['z_samples'] = 16
+        training = self.training
+        z_samples = self.config['z_samples']
+        self.eval()
+        self.config['z_samples'] = 16
         # evaluate generative model on each subset
         subset_counts = []
         subset_cumulative_bpds = []
-        for subset_name, subset in self.subsets.items():
-            data = DataLoader(
-                subset,
-                batch_size=self.config['eval_batch_size'],
-                num_workers=self.config['eval_num_workers'],
-                collate_fn=self.collate_fn,
-            )
-            subset_count = 0
-            subset_cumulative_bpd = 0
-            # evaluate on a subset
-            for x, _ in iter(data):
-                dim = reduce(lambda x, y: x * y, x.size()[1:])
-                with torch.no_grad():
-                    ll = model(x)
-                bpd = -ll / math.log(2) / dim
-                subset_count += x.size(0)
-                subset_cumulative_bpd += bpd.sum()
-            # append the subset evaluation result
-            subset_counts.append(subset_count)
-            subset_cumulative_bpds.append(subset_cumulative_bpd)
-            subset_bpd = subset_cumulative_bpd / subset_count
+        subset_count = 0
+        subset_cumulative_bpd = 0
+        # evaluate on a subset
+        for x, _ in iter(sequoia_env):
+            dim = reduce(lambda x, y: x * y, x.size()[1:])
+            with torch.no_grad():
+                ll = self(x)
+            bpd = -ll / math.log(2) / dim
+            subset_count += x.size(0)
+            subset_cumulative_bpd += bpd.sum()
+        # append the subset evaluation result
+        subset_counts.append(subset_count)
+        subset_cumulative_bpds.append(subset_cumulative_bpd)
+        subset_bpd = subset_cumulative_bpd / subset_count
         # Overall accuracy
         overall_bpd = sum(subset_cumulative_bpds) / sum(subset_counts)
         # roll back the mode
-        model.train(training)
-        model.config['z_samples'] = z_samples
+        self.train(training)
+        self.config['z_samples'] = z_samples
 
     def _eval_hard_assign(
             self,
-            model: NdpmModel,
-            step, eval_title, task_index=None,
+            sequoia_env: Environment,
+            step, task_index=None,
     ):
-        tasks = [
-            tuple([c for _, c in t['subsets']])
-            for t in self.config['data_schedule']
-        ]
-        if task_index is not None:
-            tasks = [tasks[task_index]]
+        # TODO: Should we have option to hard assign tasks or can we achieve just using sequoia env?
+        # tasks = [
+        #     tuple([c for _, c in t['subsets']])
+        #     for t in self.config['data_schedule']
+        # ]
+        # if task_index is not None:
+        #     tasks = [tasks[task_index]]
         k = 5
 
         # Overall counts
@@ -378,46 +373,46 @@ class Ndpm(nn.Module):
         correct_assign_overall = 0.
 
         # Loop over each task
-        for task_index, task_subsets in enumerate(tasks, task_index or 0):
-            # Task-wise counts
-            total = 0.
-            correct_1 = 0.
-            correct_k = 0.
-            correct_expert = 0.
-            correct_assign = 0.
+        # for task_index, task_subsets in enumerate(tasks, task_index or 0):
+        # Task-wise counts
+        total = 0.
+        correct_1 = 0.
+        correct_k = 0.
+        correct_expert = 0.
+        correct_assign = 0.
 
             # Loop over each subset
-            for subset in task_subsets:
-                data = DataLoader(
-                    self.subsets[subset],
-                    batch_size=self.config['eval_batch_size'],
-                    num_workers=self.config['eval_num_workers'],
-                    collate_fn=self.collate_fn,
-                )
-                for x, y in iter(data):
-                    with torch.no_grad():
-                        logits, assignments = model(
-                            x, return_assignments=True)
-                    total += x.size(0)
-                    correct_assign += (assignments == task_index).float().sum()
-                    if not self.config['disable_d']:
-                        # NDPM accuracy
-                        _, pred_topk = logits.topk(k, dim=1)
-                        correct_topk = (
-                            pred_topk.cpu()
-                            == y.unsqueeze(1).expand_as(pred_topk)
-                        ).float()
-                        correct_1 += correct_topk[:, :1].view(-1).sum()
-                        correct_k += correct_topk[:, :k].view(-1).sum()
+            # for subset in task_subsets:
+            #     data = DataLoader(
+            #         self.subsets[subset],
+            #         batch_size=self.config['eval_batch_size'],
+            #         num_workers=self.config['eval_num_workers'],
+            #         collate_fn=self.collate_fn,
+            #     )
+        for x, y in iter(sequoia_env):
+            with torch.no_grad():
+                logits, assignments = self(
+                    x, return_assignments=True)
+            total += x.size(0)
+            correct_assign += (assignments == task_index).float().sum()
+            if not self.config['disable_d']:
+                # NDPM accuracy
+                _, pred_topk = logits.topk(k, dim=1)
+                correct_topk = (
+                    pred_topk.cpu()
+                    == y.unsqueeze(1).expand_as(pred_topk)
+                ).float()
+                correct_1 += correct_topk[:, :1].view(-1).sum()
+                correct_k += correct_topk[:, :k].view(-1).sum()
 
-                        # Hard-assigned expert accuracy
-                        num_experts = len(model.ndpm.experts) - 1
-                        if num_experts > task_index:
-                            expert = model.ndpm.experts[task_index + 1]
-                            with torch.no_grad():
-                                logits = expert(x)
-                            correct = (y == logits.argmax(dim=1).cpu()).float()
-                            correct_expert += correct.sum()
+                # Hard-assigned expert accuracy
+                num_experts = len(self.ndpm.experts) - 1
+                if num_experts > task_index:
+                    expert = self.ndpm.experts[task_index + 1]
+                    with torch.no_grad():
+                        logits = expert(x)
+                    correct = (y == logits.argmax(dim=1).cpu()).float()
+                    correct_expert += correct.sum()
 
             # Add to overall counts
             total_overall += total

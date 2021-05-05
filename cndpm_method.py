@@ -1,5 +1,6 @@
 import gym
 import yaml
+import torch
 from typing import Tuple
 from typing import ClassVar, Type
 from argparse import ArgumentParser
@@ -67,16 +68,21 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         # Train loop
         train_model_with_sequoia_env(config, self.model, train_env)
         # Validaton loop
+        validate_model(config, self.model, valid_env)
 
-        # raise NotImplementedError("TODO: Train the model on the data from the environments.")
-    
     def get_actions(self,
                     observations: ClassIncrementalSetting.Observations,
                     action_space: gym.Space) -> ClassIncrementalSetting.Actions:
         """ Get a batch of predictions (actions) for the given observations.
         returned actions must fit the action space.
         """
-        pass
+        self.model.eval()
+        observations = observations.to(device=self.device)
+        with torch.no_grad():
+            logits = self.model(observations)
+        # Get the predicted classes
+        y_pred = logits.argmax(dim=-1)
+        return self.target_setting.Actions(y_pred)
 
     @classmethod
     def add_argparse_args(cls, parser: ArgumentParser, dest: str = "") -> None:
