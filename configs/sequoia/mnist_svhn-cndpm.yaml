@@ -12,27 +12,28 @@ sleep_num_workers: 4
 device: 'cuda'
 model_name: 'ndpm_model'
 
-g: 'mlp_sharing_vae'
-d: 'mlp_sharing_classifier'
+g: 'cnn_sharing_vae'
+d: 'resnet_sharing_classifier'
 disable_d: False
-vae_nf_base: 64
-vae_nf_ext: 16
-cls_nf_base: 64
-cls_nf_ext: 16
-z_dim: 16
+vae_nf_base: 32
+vae_nf_ext: 4
+cls_nf_base: 32
+cls_nf_ext: 32
+num_blocks: [2, 2, 2, 2]
+norm_layer: InstanceNorm2d
+z_dim: 32
 z_samples: 16
 
 recon_loss: 'gaussian'
 x_log_var_param: 0
 learn_x_log_var: false
-classifier_chill: 0.01
-
 
 #########
 # DPMoE #
 #########
 
-log_alpha: -400
+send_to_stm_always: false
+log_alpha: 0
 stm_capacity: 500
 stm_erase_period: 0
 sleep_step_g: 8000
@@ -42,23 +43,25 @@ sleep_val_size: 0
 update_min_usage: 0.1
 
 
+classifier_chill: 1
+
 #########
 # Train #
 #########
 
-implicit_lr_decay: false
 weight_decay: 0.00001
+implicit_lr_decay: False
 
 optimizer_g:
   type: Adam
   options:
-    lr: 0.0004
+    lr: 0.0003
 
 lr_scheduler_g:
   type: MultiStepLR
   options:
     milestones: [1]
-    gamma: 1.0
+    gamma: 0.1
 
 optimizer_d:
   type: Adam
@@ -69,7 +72,7 @@ lr_scheduler_d:
   type: MultiStepLR
   options:
     milestones: [1]
-    gamma: 1.0
+    gamma: 0.5
 
 clip_grad:
   type: value
