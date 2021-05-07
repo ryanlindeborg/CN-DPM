@@ -3,8 +3,8 @@ import setuptools
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
-# packages = setuptools.find_packages()
-# print("PACKAGES FOUND:", packages)
+packages = setuptools.find_namespace_packages(include=["cn_dpm*"])
+print("PACKAGES FOUND:", packages)
 print(sys.version_info)
 
 setuptools.setup(
@@ -16,7 +16,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="TODO",
-    packages=["cn_dpm"],
+    packages=packages,
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
