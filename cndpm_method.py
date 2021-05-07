@@ -7,7 +7,7 @@ from typing import ClassVar, Tuple, Type
 import gym
 import torch
 import yaml
-from sequoia.methods import Method
+from sequoia.methods import Method, register_method
 from sequoia.settings import Environment, Setting
 from sequoia.settings.passive import (
     ClassIncrementalSetting,
@@ -64,6 +64,7 @@ class HParams(HyperParameters):
     #     setattr(self, key, value)
 
 
+@register_method
 class CNDPM(Method, target_setting=ClassIncrementalSetting):
     """ A Neural Dirichlet Process Mixture Model for Task-Free Continual Learning
 
