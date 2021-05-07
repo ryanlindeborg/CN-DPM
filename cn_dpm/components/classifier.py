@@ -3,9 +3,9 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
-from ndpm.summaries import ClassificationSummaries
+from cn_dpm.ndpm.summaries import ClassificationSummaries
 from .component import ComponentD
-from utils import Lambda
+from cn_dpm.utils import Lambda
 
 
 class Classifier(ComponentD, ABC):

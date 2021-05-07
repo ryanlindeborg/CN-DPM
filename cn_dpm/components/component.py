@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch import Tensor, autograd
-from ndpm.summaries import Summaries, VaeSummaries, ClassificationSummaries
+from cn_dpm.ndpm.summaries import Summaries, VaeSummaries, ClassificationSummaries
 from typing import Tuple, List
 
 

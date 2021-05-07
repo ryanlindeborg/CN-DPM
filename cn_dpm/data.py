@@ -15,8 +15,8 @@ from torch.utils.data.dataloader import default_collate
 import torchvision
 import torchvision.transforms as transforms
 from tensorboardX import SummaryWriter
-from models.base import Model
-from models.ndpm_model import NdpmModel
+from cn_dpm.models.base import Model
+from cn_dpm.models.ndpm_model import NdpmModel
 
 
 # =====================

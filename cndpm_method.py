@@ -1,23 +1,72 @@
-import gym
-import yaml
-import torch
-from typing import Tuple
-from typing import ClassVar, Type
+import os
 from argparse import ArgumentParser
+from dataclasses import dataclass
+from pathlib import Path
+from typing import ClassVar, Tuple, Type
 
+import gym
+import torch
+import yaml
 from sequoia.methods import Method
-from sequoia.settings import Setting, Environment
-from sequoia.settings.passive import PassiveSetting, PassiveEnvironment, ClassIncrementalSetting
+from sequoia.settings import Environment, Setting
+from sequoia.settings.passive import (
+    ClassIncrementalSetting,
+    PassiveEnvironment,
+    PassiveSetting,
+)
+from simple_parsing.helpers.hparams import HyperParameters
 
-from models.ndpm_model import NdpmModel
-from train import train_model_with_sequoia_env
-from validate import validate_model
+from cn_dpm.models.ndpm_model import NdpmModel
+from cn_dpm.train import train_model_with_sequoia_env
+from cn_dpm.validate import validate_model
 
-CNDPM_YAML_PATH = './sequoia/methods/cn_dpm/configs/cndpm.yaml'
+# Directory containing this source code.
+SOURCE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
+# Directory containing the 'configs'.
+CONFIGS_DIR = SOURCE_DIR / "cn_dpm" / "configs"
+CNDPM_YAML_PATH = CONFIGS_DIR / "cndpm.yaml"
+
+
+# TODO: (medium-priority) Create a `Config` or `HParams` dataclass containing the
+# hyper-parameters of the model, which are currently all defined inside the config
+# files.
+
+# Then, when creating the model from cn_dpm, we could convert this `HParams` object into
+# a dict with either `hparams.to_dict()` or `dataclasses.asdict(hparams)`, and then pass
+# the dict to the constructor, just as before.
+
+# @lebrice The reason I think this is a good idea is that it would make it much
+# easier to see what the hyper-parameters are, and also make it easier for others to
+# reuse/extend this model / method and inherit their hyper-parameters.
+
+# NOTE: (@lebrice) You can (and might probably have to) create multiple Config
+# dataclasses, one for each group of related parameters! For example, one dataclass for
+# the `OptimizerConfig`, another for the `TrainConfig`, etc etc. These config classes
+# can also be nested within a larger `ModelConfig` (or something similar) by using them
+# as a field of the parent class.
+
+# Actually, funily enough, I think I started doing this myself a while back! You can use
+# this as inspiration if you want:
+# https://github.com/lebrice/SimpleParsing/blob/master/test/utils/test_flattened.py
+
+
+@dataclass
+class HParams(HyperParameters):
+    """ Hyper-parameters of the CN-DPM model. """
+
+    # We could also pass a `HParams` object to the Model constructor, rather than a
+    # dictionary, and then just add a few methods like this to make it behave like
+    # a dict. Its probably easier to just convert this object to a dict though.
+    # def __getitem__(self, key: str):
+    #     return getattr(self, key)
+
+    # def __setitem__(self, key: str, value: Any) -> None:
+    #     setattr(self, key, value)
+
 
 class CNDPM(Method, target_setting=ClassIncrementalSetting):
     """ A Neural Dirichlet Process Mixture Model for Task-Free Continual Learning
-    
+
     https://arxiv.org/abs/2001.00689
     """
 
@@ -28,12 +77,12 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
         # We will create this when `configure` is called, before training.
         self.model: NdpmModel
-    
+
     def configure(self, setting: ClassIncrementalSetting):
         """Configures this method before it gets applied on the given Setting.
-        
+
         NOTE: This will be called by the Setting, you don't need to call this yourself.
-        
+
         Args:
             setting (SettingType): The setting the method will be evaluated on.
         """
@@ -52,14 +101,12 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         print(f"Number of tasks: {number_of_tasks}")
         config["y_c"] = number_of_tasks
 
-        self.model = self.ModelType(
-            config,
-        )
-        self.model.to(config['device'])
+        self.model = self.ModelType(config,)
+        self.model.to(config["device"])
 
     def fit(self, train_env: Environment, valid_env: Environment):
         """Called by the Setting to give the method data to train with.
-        
+
         Might be called more than once before training is 'complete'.
         """
         config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
@@ -68,11 +115,14 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         # Train loop
         train_model_with_sequoia_env(config, self.model, train_env)
         # Validaton loop
-        validate_model(config, self.model, valid_env)
+        # TODO: Fix the validation loop (see `validate_model` function)
+        # validate_model(config, self.model, valid_env)
 
-    def get_actions(self,
-                    observations: ClassIncrementalSetting.Observations,
-                    action_space: gym.Space) -> ClassIncrementalSetting.Actions:
+    def get_actions(
+        self,
+        observations: ClassIncrementalSetting.Observations,
+        action_space: gym.Space,
+    ) -> ClassIncrementalSetting.Actions:
         """ Get a batch of predictions (actions) for the given observations.
         returned actions must fit the action space.
         """
@@ -101,10 +151,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         parser.add_argument(f"--{prefix}log_dir", type=str, default="logs")
 
 
-
-
 if __name__ == "__main__":
-    from sequoia.settings.passive import ClassIncrementalSetting
     setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)
     method = CNDPM()
 
