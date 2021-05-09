@@ -11,7 +11,7 @@ class Component(nn.Module, ABC):
     def __init__(self, config, experts: Tuple):
         super().__init__()
         self.config = config
-        self.device = config['device'] if 'device' in config else 'cuda'
+        self.device = config['device']
 
         self.experts = experts
 

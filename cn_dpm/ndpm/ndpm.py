@@ -20,7 +20,7 @@ class Ndpm(nn.Module):
         self.stm_y = []
         self.stm_next_erase = config['stm_erase_period']
         self.prior = CumulativePrior(config)
-        self.device = config['device'] if 'device' in config else 'cuda'
+        self.device = config['device']
 
     def get_experts(self):
         return tuple(self.experts.children())
@@ -48,7 +48,7 @@ class Ndpm(nn.Module):
         summarize = step % self.config['summary_step'] == 0
         x, y = x.to(self.device), y.to(self.device)
 
-        if self.config.get('send_to_stm_always'):
+        if self.config["send_to_stm_always"]:
             self.stm_x.extend(torch.unbind(x.cpu()))
             self.stm_y.extend(torch.unbind(y.cpu()))
         else:
@@ -68,7 +68,7 @@ class Ndpm(nn.Module):
 
             # Save to short-term memory
             destination = torch.argmin(nl_joint, dim=1).to(self.device)  # [B]
-            if 'known_destination' in self.config:
+            if self.config["known_destination"]:
                 destination = torch.tensor(self.config['known_destination'])[y]
                 destination = torch.where(
                     destination >= len(self.experts),
@@ -92,7 +92,7 @@ class Ndpm(nn.Module):
                 to_expert = \
                     to_expert / (to_expert.sum(dim=1).view(-1, 1) + 1e-7)
 
-            if 'known_destination' in self.config:
+            if self.config["known_destination"]:
                 to_expert = torch.eye(len(self.experts))[destination]
                 to_expert = to_expert.to(self.device)
 

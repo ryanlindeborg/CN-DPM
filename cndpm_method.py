@@ -2,7 +2,7 @@ import os
 from argparse import ArgumentParser
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar, Tuple, Type, Dict, Any, Optional
+from typing import ClassVar, Tuple, Type, Dict, Any, Optional, List
 
 import gym
 import torch
@@ -59,6 +59,12 @@ class ObjectConfig:
         self.type = type
         self.options = kwargs
 
+    def __getitem__(self, key: str):
+        return getattr(self, key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        setattr(self, key, value)
+
 @dataclass
 class DatasetConfig:
     """Dataset Config."""
@@ -80,6 +86,7 @@ class ModelConfig:
     z_dim: int = 16
     z_samples: int = 16
 
+    pretrained_init: Optional[Dict] = None
     precursor_conditioned_decoder: Optional[bool] = False
     recon_loss: str = "gaussian"
     x_log_var_param: Optional[int] = 0
@@ -98,6 +105,8 @@ class DPMoEConfig:
     sleep_step_d: int = 2000
     sleep_summary_step: int = 500
     update_min_usage: float = 0.1
+    send_to_stm_always: Optional[bool] = False
+    known_destination: Optional[List] = None
 
 @dataclass
 class TrainConfig:
@@ -118,6 +127,13 @@ class EvalConfig:
     eval_t: Optional[bool] = False
 
 @dataclass
+class SummaryConfig:
+    """ Summary configuration """
+    summary_step: int = 250
+    eval_step: int = 250
+    summarize_samples: bool = False
+
+@dataclass
 class HParams(HyperParameters, FlattenedAccess):
     """ Hyper-parameters of the CN-DPM model. """
 
@@ -126,14 +142,16 @@ class HParams(HyperParameters, FlattenedAccess):
     # a dict. Its probably easier to just convert this object to a dict though.
     # def __getitem__(self, key: str):
     #     return getattr(self, key)
-
+    #
     # def __setitem__(self, key: str, value: Any) -> None:
     #     setattr(self, key, value)
+
     dataset: DatasetConfig
     model: ModelConfig
-    dpmmoe: DPMoEConfig
+    dpmoe: DPMoEConfig
     train: TrainConfig
     eval: EvalConfig
+    summary: SummaryConfig
 
 
 @register_method
@@ -149,7 +167,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         # The cn_dpm_config here consists of the model hyperparameters
         self.cn_dpm_config = cn_dpm_config
         self.learning_rate = learning_rate
-        self.device = self.cn_dpm_config['device'] if 'device' in self.cn_dpm_config else 'cuda'
+        self.device = self.cn_dpm_config['device']
 
         # We will create this when `configure` is called, before training.
         self.model: NdpmModel
@@ -229,7 +247,13 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
 if __name__ == "__main__":
     setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)
-    hparams = HParams()
+    hparams = HParams(
+        dataset=DatasetConfig(),
+        model=ModelConfig(),
+        dpmoe=DPMoEConfig(),
+        train=TrainConfig(),
+        eval=EvalConfig(),
+        summary=SummaryConfig())
     method = CNDPM(hparams)
 
     results = setting.apply(method)

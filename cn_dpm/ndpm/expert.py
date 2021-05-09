@@ -14,7 +14,7 @@ class Expert(nn.Module):
         self.config = config
         self.id = len(experts)
         self.experts = experts
-        self.device = config["device"] if "device" in config else "cuda"
+        self.device = config["device"]
 
         self.g: ComponentG = G[config["g"]](config, experts)
         self.d: ComponentD = (
@@ -33,7 +33,7 @@ class Expert(nn.Module):
                 p.requires_grad = False
 
         # otherwise use pretrained weights if provided
-        if config.get("pretrained_init") is not None:
+        if config["pretrained_init"] is not None:
             state_dict = torch.load(config["pretrained_init"])
             state_dict = {k.split("component.")[1]: v for k, v in state_dict.items()}
             self.g.load_state_dict(state_dict)
