@@ -1,8 +1,8 @@
 import os
 from argparse import ArgumentParser
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar, Tuple, Type
+from typing import ClassVar, Tuple, Type, Dict, Any, Optional
 
 import gym
 import torch
@@ -15,6 +15,7 @@ from sequoia.settings.passive import (
     PassiveSetting,
 )
 from simple_parsing.helpers.hparams import HyperParameters
+from simple_parsing.helpers.flatten import FlattenedAccess
 
 from cn_dpm.models.ndpm_model import NdpmModel
 from cn_dpm.train import train_model_with_sequoia_env
@@ -49,9 +50,75 @@ CNDPM_YAML_PATH = CONFIGS_DIR / "cndpm.yaml"
 # this as inspiration if you want:
 # https://github.com/lebrice/SimpleParsing/blob/master/test/utils/test_flattened.py
 
+@dataclass(init=False)
+class ObjectConfig:
+    """Configuration for a generic Object with a type and some kwargs."""
+    type: str = ""
+    options: Dict[str, Any] = field(default_factory=dict)
+    def __init__(self, type: str, **kwargs):
+        self.type = type
+        self.options = kwargs
 
 @dataclass
-class HParams(HyperParameters):
+class DatasetConfig:
+    """Dataset Config."""
+    sleep_batch_size: int = 50
+    sleep_num_workers: int = 4
+
+@dataclass
+class ModelConfig:
+    """Model configuration."""
+    device: str = "cuda"
+    model_name: str = "ndpm_model"
+    g: str = "mlp_sharing_vae"
+    d: Optional[str] = "mlp_sharing_classifier"
+    disable_d: bool = False
+    vae_nf_base: int = 64
+    vae_nf_ext: int = 16
+    cls_nf_base: Optional[int] = 64
+    cls_nf_ext: Optional[int] = 16
+    z_dim: int = 16
+    z_samples: int = 16
+
+    precursor_conditioned_decoder: Optional[bool] = False
+    recon_loss: str = "gaussian"
+    x_log_var_param: Optional[int] = 0
+    learn_x_log_var: Optional[bool] = False
+    classifier_chill: float = 0.01
+
+@dataclass
+class DPMoEConfig:
+    """Configuration of the Dirichlet Process Mixture of Experts Model. """
+    log_alpha: int = -400
+    stm_capacity: int = 500
+    sleep_val_size: int = 0
+    stm_erase_period: int = 0
+
+    sleep_step_g: int = 8000
+    sleep_step_d: int = 2000
+    sleep_summary_step: int = 500
+    update_min_usage: float = 0.1
+
+@dataclass
+class TrainConfig:
+    """ Training Configuration. """
+    weight_decay: float = 0.00001
+    implicit_lr_decay: bool = False
+    optimizer_g: ObjectConfig = ObjectConfig(type="Adam", lr=0.0004)
+    optimizer_d: Optional[ObjectConfig] = ObjectConfig(type="Adam", lr=0.0001)
+    lr_scheduler_g: ObjectConfig = ObjectConfig(type="MultiStepLR", milestones=[1], gamma=1.0)
+    lr_scheduler_d: Optional[ObjectConfig] = ObjectConfig(type="MultiStepLR", milestones=[1], gamma=1.0)
+    clip_grad: ObjectConfig = ObjectConfig(type="value", clip_value=0.5)
+
+@dataclass
+class EvalConfig:
+    """ Eval configuration. """
+    eval_d: bool = False
+    eval_g: bool = True
+    eval_t: Optional[bool] = False
+
+@dataclass
+class HParams(HyperParameters, FlattenedAccess):
     """ Hyper-parameters of the CN-DPM model. """
 
     # We could also pass a `HParams` object to the Model constructor, rather than a
@@ -62,6 +129,11 @@ class HParams(HyperParameters):
 
     # def __setitem__(self, key: str, value: Any) -> None:
     #     setattr(self, key, value)
+    dataset: DatasetConfig
+    model: ModelConfig
+    dpmmoe: DPMoEConfig
+    train: TrainConfig
+    eval: EvalConfig
 
 
 @register_method
@@ -73,8 +145,11 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
     ModelType: ClassVar[Type[NdpmModel]] = NdpmModel
 
-    def __init__(self, learning_rate: float = 3e-4):
+    def __init__(self, cn_dpm_config, learning_rate: float = 3e-4):
+        # The cn_dpm_config here consists of the model hyperparameters
+        self.cn_dpm_config = cn_dpm_config
         self.learning_rate = learning_rate
+        self.device = self.cn_dpm_config['device'] if 'device' in self.cn_dpm_config else 'cuda'
 
         # We will create this when `configure` is called, before training.
         self.model: NdpmModel
@@ -89,32 +164,32 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         """
         print(f"Observations space: {setting.observation_space}")
         # Load config, to pass into model when initialize
-        config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
+        # config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
         # Observation space is tuple consisting of number of channels, height of image, width of image
         image_size: Tuple[int, ...] = setting.observation_space.x.shape
         print(f"image_size: {image_size}")
         x_c, x_h, x_w = image_size
-        config["x_c"] = x_c
-        config["x_h"] = x_h
-        config["x_w"] = x_w
+        self.cn_dpm_config["x_c"] = x_c
+        self.cn_dpm_config["x_h"] = x_h
+        self.cn_dpm_config["x_w"] = x_w
 
         number_of_tasks = setting.nb_tasks
         print(f"Number of tasks: {number_of_tasks}")
-        config["y_c"] = number_of_tasks
+        self.cn_dpm_config["y_c"] = number_of_tasks
 
-        self.model = self.ModelType(config,)
-        self.model.to(config["device"])
+        self.model = self.ModelType(self.cn_dpm_config,)
+        self.model.to(self.cn_dpm_config["device"])
 
     def fit(self, train_env: Environment, valid_env: Environment):
         """Called by the Setting to give the method data to train with.
 
         Might be called more than once before training is 'complete'.
         """
-        config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
+        # config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
         # data_scheduler = DataScheduler(config)
 
         # Train loop
-        train_model_with_sequoia_env(config, self.model, train_env)
+        train_model_with_sequoia_env(self.cn_dpm_config, self.model, train_env)
         # Validaton loop
         # TODO: Fix the validation loop (see `validate_model` function)
         # validate_model(config, self.model, valid_env)
@@ -154,7 +229,8 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
 if __name__ == "__main__":
     setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)
-    method = CNDPM()
+    hparams = HParams()
+    method = CNDPM(hparams)
 
     results = setting.apply(method)
     print(results.summary())
