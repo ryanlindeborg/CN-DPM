@@ -180,6 +180,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         Args:
             setting (SettingType): The setting the method will be evaluated on.
         """
+        self.setting = setting
         print(f"Observations space: {setting.observation_space}")
         # Load config, to pass into model when initialize
         # config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
@@ -195,7 +196,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         print(f"Number of tasks: {number_of_tasks}")
         self.cn_dpm_config["y_c"] = number_of_tasks
 
-        self.model = self.ModelType(self.cn_dpm_config,)
+        self.model = self.ModelType(self.cn_dpm_config)
         self.model.to(self.cn_dpm_config["device"])
 
     def fit(self, train_env: Environment, valid_env: Environment):
