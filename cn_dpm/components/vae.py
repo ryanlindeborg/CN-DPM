@@ -152,7 +152,7 @@ class SharingVae(Vae, ABC):
         x_logits = []
         for z_mean, z_log_var, vae in zip(z_means, z_log_vars, vaes):
             z = self.reparameterize(z_mean, z_log_var, self.config['z_samples'])
-            if self.config.get('precursor_conditioned_decoder'):
+            if self.config["precursor_conditioned_decoder"]:
                 x_logit = vae.decode(z, as_logit=True)
                 x_logits.append(x_logit)
                 continue

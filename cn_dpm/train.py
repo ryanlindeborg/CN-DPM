@@ -53,6 +53,8 @@ def train_model_with_sequoia_env(
             y is not None
         ), "Assuming that we have access to both `x` and `y` at the same time for now."
         # learn the model
+        print("\nModel dimensions:")
+        print(f"********Step: {step}, x size: {x.size()}, y size: {y.size()}, t: {t}")
         model.learn(x, y, t, step)
 
 

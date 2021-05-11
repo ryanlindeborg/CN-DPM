@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler
+from torch import Tensor
+from typing import Optional
 from .expert import Expert
 from .priors import CumulativePrior
 
@@ -53,6 +55,7 @@ class Ndpm(nn.Module):
             self.stm_y.extend(torch.unbind(y.cpu()))
         else:
             # Determine the destination of each data point
+            print(f"*********************Collect nll: X: {x.size()}, y: {y.size()}")
             nll, summaries = self.experts[-1].collect_nll(x, y)  # [B, 1+K]
             nl_prior = self.prior.nl_prior()  # [1+K]
             nl_joint = nll + nl_prior.unsqueeze(0).expand(
@@ -111,7 +114,7 @@ class Ndpm(nn.Module):
             loss = losses.sum()
 
             if loss.requires_grad:
-                if 'update_min_usage' in self.config:
+                if self.config['update_min_usage']:
                     update_threshold = self.config['update_min_usage']
                 else:
                     update_threshold = 0
@@ -266,20 +269,20 @@ class Ndpm(nn.Module):
         # Disabled
         pass
 
-    def evaluate_model(self, sequoia_env, step):
+    def evaluate_model(self, sequoia_env):
         if self.config['eval_d']:
-            self._eval_discriminative_model(sequoia_env, step)
+            self._eval_discriminative_model(sequoia_env)
         if self.config['eval_g']:
-            self._eval_generative_model(sequoia_env, step)
-        if 'eval_t' in self.config and self.config['eval_t']:
+            self._eval_generative_model(sequoia_env)
+        if self.config['eval_t']:
             self._eval_hard_assign(
-                sequoia_env, step
+                sequoia_env
             )
 
     def _eval_discriminative_model(
             self,
-            sequoia_env: Environment,
-            step):
+            sequoia_env: Environment):
+        print("****Entered discriminative model fxn!!!!!!!!")
         training = self.training
         self.eval()
 
@@ -293,7 +296,12 @@ class Ndpm(nn.Module):
         correct_1 = 0.
         correct_k = 0.
 
-        for x, y in iter(sequoia_env):
+        # for step, (observations, rewards) in iter(sequoia_env):
+        for (observations, rewards) in iter(sequoia_env):
+            x: Tensor = observations.x
+            t: Optional[Tensor] = observations.task_labels
+            y: Optional[Tensor] = rewards.y if rewards is not None else None
+            print(f"!!!!!!!!!Eval dataloader iter(discriminative) x {x.size()}, y: {y.size()}")
             b = x.size(0)
             with torch.no_grad():
                 logits = self(x).view(b, -1)
@@ -321,8 +329,8 @@ class Ndpm(nn.Module):
 
     def _eval_generative_model(
             self,
-            sequoia_env: Environment,
-            step):
+            sequoia_env: Environment):
+        print("****Entered generative model fxn!!!!!!!!")
         # change the model to eval mode
         training = self.training
         z_samples = self.config['z_samples']
@@ -334,7 +342,8 @@ class Ndpm(nn.Module):
         subset_count = 0
         subset_cumulative_bpd = 0
         # evaluate on a subset
-        for x, _ in iter(sequoia_env):
+        for _, (observations, _) in iter(sequoia_env):
+            x: Tensor = observations.x
             dim = reduce(lambda x, y: x * y, x.size()[1:])
             with torch.no_grad():
                 ll = self(x)
@@ -353,9 +362,9 @@ class Ndpm(nn.Module):
 
     def _eval_hard_assign(
             self,
-            sequoia_env: Environment,
-            step, task_index=None,
+            sequoia_env: Environment, task_index=None,
     ):
+        print("Entered hard assign model fxn")
         # TODO: Should we have option to hard assign tasks or can we achieve just using sequoia env?
         # tasks = [
         #     tuple([c for _, c in t['subsets']])

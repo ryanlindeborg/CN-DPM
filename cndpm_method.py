@@ -6,6 +6,7 @@ from typing import ClassVar, Tuple, Type, Dict, Any, Optional, List
 
 import gym
 import torch
+from torch import Tensor
 import yaml
 from sequoia.methods import Method, register_method
 from sequoia.settings import Environment, Setting
@@ -104,7 +105,7 @@ class DPMoEConfig:
     sleep_step_g: int = 8000
     sleep_step_d: int = 2000
     sleep_summary_step: int = 500
-    update_min_usage: float = 0.1
+    update_min_usage: Optional[float] = 0.1
     send_to_stm_always: Optional[bool] = False
     known_destination: Optional[List] = None
 
@@ -122,8 +123,10 @@ class TrainConfig:
 @dataclass
 class EvalConfig:
     """ Eval configuration. """
-    eval_d: bool = False
-    eval_g: bool = True
+    # eval_d: bool = False
+    eval_d: bool = True
+    # eval_g: bool = True
+    eval_g: bool = False
     eval_t: Optional[bool] = False
 
 @dataclass
@@ -211,7 +214,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         train_model_with_sequoia_env(self.cn_dpm_config, self.model, train_env)
         # Validaton loop
         # TODO: Fix the validation loop (see `validate_model` function)
-        # validate_model(config, self.model, valid_env)
+        validate_model(self.cn_dpm_config, self.model, valid_env)
 
     def get_actions(
         self,
@@ -222,9 +225,10 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         returned actions must fit the action space.
         """
         self.model.eval()
-        observations = observations.to(device=self.device)
+        x: Tensor = observations.x
+        x = x.to(device=self.device)
         with torch.no_grad():
-            logits = self.model(observations)
+            logits = self.model(x)
         # Get the predicted classes
         y_pred = logits.argmax(dim=-1)
         return self.target_setting.Actions(y_pred)
