@@ -76,6 +76,7 @@ class DatasetConfig:
 class ModelConfig:
     """Model configuration."""
     device: str = "cuda"
+    # device: str = "cpu"
     model_name: str = "ndpm_model"
     g: str = "mlp_sharing_vae"
     d: Optional[str] = "mlp_sharing_classifier"
@@ -197,7 +198,9 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
         number_of_tasks = setting.nb_tasks
         print(f"Number of tasks: {number_of_tasks}")
-        self.cn_dpm_config["y_c"] = number_of_tasks
+
+        # Fetch output size from action space size
+        self.cn_dpm_config["y_c"] = setting.action_space.n
 
         self.model = self.ModelType(self.cn_dpm_config)
         self.model.to(self.cn_dpm_config["device"])
