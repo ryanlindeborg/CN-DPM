@@ -75,7 +75,7 @@ class DatasetConfig:
 @dataclass
 class ModelConfig:
     """Model configuration."""
-    disable_cuda = False
+    disable_cuda: bool = False
     model_name: str = "ndpm_model"
     g: str = "mlp_sharing_vae"
     d: Optional[str] = "mlp_sharing_classifier"
