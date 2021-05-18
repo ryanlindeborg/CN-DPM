@@ -342,7 +342,7 @@ class Ndpm(nn.Module):
         subset_count = 0
         subset_cumulative_bpd = 0
         # evaluate on a subset
-        for _, (observations, _) in iter(sequoia_env):
+        for (observations, _) in iter(sequoia_env):
             x: Tensor = observations.x
             dim = reduce(lambda x, y: x * y, x.size()[1:])
             with torch.no_grad():
@@ -398,7 +398,10 @@ class Ndpm(nn.Module):
             #         num_workers=self.config['eval_num_workers'],
             #         collate_fn=self.collate_fn,
             #     )
-        for x, y in iter(sequoia_env):
+        for (observations, rewards) in iter(sequoia_env):
+            x: Tensor = observations.x
+            t: Optional[Tensor] = observations.task_labels
+            y: Optional[Tensor] = rewards.y if rewards is not None else None
             with torch.no_grad():
                 logits, assignments = self(
                     x, return_assignments=True)
