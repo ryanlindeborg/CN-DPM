@@ -75,8 +75,7 @@ class DatasetConfig:
 @dataclass
 class ModelConfig:
     """Model configuration."""
-    device: str = "cuda"
-    # device: str = "cpu"
+    disable_cuda = False
     model_name: str = "ndpm_model"
     g: str = "mlp_sharing_vae"
     d: Optional[str] = "mlp_sharing_classifier"
@@ -170,8 +169,15 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
     def __init__(self, cn_dpm_config, learning_rate: float = 3e-4):
         # The cn_dpm_config here consists of the model hyperparameters
         self.cn_dpm_config = cn_dpm_config
+        if self.cn_dpm_config["disable_cuda"]:
+            self.cn_dpm_config["device"] = "cpu"
+        else:
+            if torch.cuda.is_available():
+                self.cn_dpm_config["device"] = "cuda"
+            else:
+                self.cn_dpm_config["device"] = "cpu"
         self.learning_rate = learning_rate
-        self.device = self.cn_dpm_config['device']
+        self.device = self.cn_dpm_config["device"]
 
         # We will create this when `configure` is called, before training.
         self.model: NdpmModel
