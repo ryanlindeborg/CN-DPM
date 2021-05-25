@@ -1,6 +1,5 @@
 import os
-from argparse import ArgumentParser
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import ClassVar, Tuple, Type, Dict, Any, Optional, List
 
@@ -8,6 +7,7 @@ import gym
 import torch
 from torch import Tensor
 import yaml
+import json
 from sequoia.methods import Method, register_method
 from sequoia.settings import Environment, Setting
 from sequoia.settings.passive import (
@@ -15,6 +15,7 @@ from sequoia.settings.passive import (
     PassiveEnvironment,
     PassiveSetting,
 )
+from simple_parsing import ArgumentParser, mutable_field
 from simple_parsing.helpers.hparams import HyperParameters
 from simple_parsing.helpers.flatten import FlattenedAccess
 
@@ -51,14 +52,11 @@ CNDPM_YAML_PATH = CONFIGS_DIR / "cndpm.yaml"
 # this as inspiration if you want:
 # https://github.com/lebrice/SimpleParsing/blob/master/test/utils/test_flattened.py
 
-@dataclass(init=False)
+@dataclass()
 class ObjectConfig:
     """Configuration for a generic Object with a type and some kwargs."""
     type: str = ""
     options: Dict[str, Any] = field(default_factory=dict)
-    def __init__(self, type: str, **kwargs):
-        self.type = type
-        self.options = kwargs
 
     def __getitem__(self, key: str):
         return getattr(self, key)
@@ -76,10 +74,13 @@ class DatasetConfig:
 class ModelConfig:
     """Model configuration."""
     disable_cuda: bool = False
+    # disable_cuda: bool = True
     model_name: str = "ndpm_model"
     g: str = "mlp_sharing_vae"
     d: Optional[str] = "mlp_sharing_classifier"
     disable_d: bool = False
+    # d: Optional[str] = None
+    # disable_d: bool = True
     vae_nf_base: int = 64
     vae_nf_ext: int = 16
     cls_nf_base: Optional[int] = 64
@@ -114,11 +115,11 @@ class TrainConfig:
     """ Training Configuration. """
     weight_decay: float = 0.00001
     implicit_lr_decay: bool = False
-    optimizer_g: ObjectConfig = ObjectConfig(type="Adam", lr=0.0004)
-    optimizer_d: Optional[ObjectConfig] = ObjectConfig(type="Adam", lr=0.0001)
-    lr_scheduler_g: ObjectConfig = ObjectConfig(type="MultiStepLR", milestones=[1], gamma=1.0)
-    lr_scheduler_d: Optional[ObjectConfig] = ObjectConfig(type="MultiStepLR", milestones=[1], gamma=1.0)
-    clip_grad: ObjectConfig = ObjectConfig(type="value", clip_value=0.5)
+    optimizer_g: ObjectConfig = ObjectConfig(type="Adam", options={"lr": 0.0004})
+    optimizer_d: Optional[ObjectConfig] = ObjectConfig(type="Adam", options={"lr": 0.0001})
+    lr_scheduler_g: ObjectConfig = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
+    lr_scheduler_d: Optional[ObjectConfig] = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
+    clip_grad: ObjectConfig = ObjectConfig(type="value", options={"clip_value": 0.5})
 
 @dataclass
 class EvalConfig:
@@ -149,12 +150,23 @@ class HParams(HyperParameters, FlattenedAccess):
     # def __setitem__(self, key: str, value: Any) -> None:
     #     setattr(self, key, value)
 
-    dataset: DatasetConfig
-    model: ModelConfig
-    dpmoe: DPMoEConfig
-    train: TrainConfig
-    eval: EvalConfig
-    summary: SummaryConfig
+    dataset: DatasetConfig = mutable_field(DatasetConfig)
+    model: ModelConfig = mutable_field(ModelConfig)
+    dpmoe: DPMoEConfig = mutable_field(DPMoEConfig)
+    train: TrainConfig = mutable_field(TrainConfig)
+    eval: EvalConfig = mutable_field(EvalConfig)
+    summary: SummaryConfig = mutable_field(SummaryConfig)
+
+    def save(self, path: str):
+        with open(path, "w") as f:
+            config_dict = asdict(self)
+            json.dump(config_dict, f, indent=1)
+
+    @classmethod
+    def load(cls, path: str):
+        with open(path, "r") as f:
+            config_dict = json.load(f)
+            return cls(**config_dict)
 
 
 @register_method
@@ -192,8 +204,6 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         """
         self.setting = setting
         print(f"Observations space: {setting.observation_space}")
-        # Load config, to pass into model when initialize
-        # config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
         # Observation space is tuple consisting of number of channels, height of image, width of image
         image_size: Tuple[int, ...] = setting.observation_space.x.shape
         print(f"image_size: {image_size}")
@@ -216,9 +226,6 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
         Might be called more than once before training is 'complete'.
         """
-        # config = yaml.load(open(CNDPM_YAML_PATH), Loader=yaml.FullLoader)
-        # data_scheduler = DataScheduler(config)
-
         # Train loop
         train_model_with_sequoia_env(self.cn_dpm_config, self.model, train_env)
         # Validaton loop
@@ -242,25 +249,29 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
         y_pred = logits.argmax(dim=-1)
         return self.target_setting.Actions(y_pred)
 
-    @classmethod
-    def add_argparse_args(cls, parser: ArgumentParser, dest: str = "") -> None:
-        """Add the command-line arguments for this Method to the given parser.
 
-        Parameters
-        ----------
-        parser : ArgumentParser
-            The ArgumentParser.
-        dest : str, optional
-            The 'base' destination where the arguments should be set on the
-            namespace, by default empty, in which case the arguments can be at
-            the "root" level on the namespace.
-        """
-        prefix = f"{dest}." if dest else ""
-        parser.add_argument(f"--{prefix}log_dir", type=str, default="logs")
 
 
 if __name__ == "__main__":
     setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)
+
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--load_path",
+        type=str,
+        default=None,
+        help="If given, the HyperParameters are read from the given file instead of from the command-line."
+    )
+    parser.add_arguments(HParams, dest="hparams")
+    args = parser.parse_args()
+
+    load_path: str = args.load_path
+    if load_path is None:
+        hparams: HParams = args.hparams
+    else:
+        hparams = HParams.load_json(load_path)
+    print(f"Logging hparams: {hparams}")
+
     hparams = HParams(
         dataset=DatasetConfig(),
         model=ModelConfig(),
