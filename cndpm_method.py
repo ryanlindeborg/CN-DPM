@@ -73,26 +73,31 @@ class DatasetConfig:
 @dataclass
 class ModelConfig:
     """Model configuration."""
-    disable_cuda: bool = False
-    # disable_cuda: bool = True
     model_name: str = "ndpm_model"
     g: str = "mlp_sharing_vae"
-    d: Optional[str] = "mlp_sharing_classifier"
+    # d: Optional[str] = "mlp_sharing_classifier"
+    d: str = "mlp_sharing_classifier"
     disable_d: bool = False
     # d: Optional[str] = None
     # disable_d: bool = True
     vae_nf_base: int = 64
     vae_nf_ext: int = 16
-    cls_nf_base: Optional[int] = 64
-    cls_nf_ext: Optional[int] = 16
+    # cls_nf_base: Optional[int] = 64
+    # cls_nf_ext: Optional[int] = 16
+    cls_nf_base: int = 64
+    cls_nf_ext: int = 16
     z_dim: int = 16
     z_samples: int = 16
 
+
     pretrained_init: Optional[Dict] = None
-    precursor_conditioned_decoder: Optional[bool] = False
+    # precursor_conditioned_decoder: Optional[bool] = False
+    precursor_conditioned_decoder: bool = False
     recon_loss: str = "gaussian"
-    x_log_var_param: Optional[int] = 0
-    learn_x_log_var: Optional[bool] = False
+    # x_log_var_param: Optional[int] = 0
+    # learn_x_log_var: Optional[bool] = False
+    x_log_var_param: int = 0
+    learn_x_log_var: bool = False
     classifier_chill: float = 0.01
 
 @dataclass
@@ -106,9 +111,11 @@ class DPMoEConfig:
     sleep_step_g: int = 8000
     sleep_step_d: int = 2000
     sleep_summary_step: int = 500
-    update_min_usage: Optional[float] = 0.1
-    send_to_stm_always: Optional[bool] = False
+    # update_min_usage: Optional[float] = 0.1
+    # send_to_stm_always: Optional[bool] = False
     known_destination: Optional[List] = None
+    update_min_usage: float = 0.1
+    send_to_stm_always: bool = False
 
 @dataclass
 class TrainConfig:
@@ -116,9 +123,11 @@ class TrainConfig:
     weight_decay: float = 0.00001
     implicit_lr_decay: bool = False
     optimizer_g: ObjectConfig = ObjectConfig(type="Adam", options={"lr": 0.0004})
-    optimizer_d: Optional[ObjectConfig] = ObjectConfig(type="Adam", options={"lr": 0.0001})
+    # optimizer_d: Optional[ObjectConfig] = ObjectConfig(type="Adam", options={"lr": 0.0001})
+    optimizer_d: ObjectConfig = ObjectConfig(type="Adam", options={"lr": 0.0001})
     lr_scheduler_g: ObjectConfig = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
-    lr_scheduler_d: Optional[ObjectConfig] = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
+    # lr_scheduler_d: Optional[ObjectConfig] = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
+    lr_scheduler_d: ObjectConfig = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
     clip_grad: ObjectConfig = ObjectConfig(type="value", options={"clip_value": 0.5})
 
 @dataclass
@@ -128,7 +137,8 @@ class EvalConfig:
     eval_d: bool = True
     # eval_g: bool = True
     eval_g: bool = False
-    eval_t: Optional[bool] = False
+    # eval_t: Optional[bool] = False
+    eval_t: bool = False
 
 @dataclass
 class SummaryConfig:
@@ -156,6 +166,11 @@ class HParams(HyperParameters, FlattenedAccess):
     train: TrainConfig = mutable_field(TrainConfig)
     eval: EvalConfig = mutable_field(EvalConfig)
     summary: SummaryConfig = mutable_field(SummaryConfig)
+
+    disable_cuda: Optional[bool] = False # Denotes whether to use CPU instead of CUDA device
+    cndpm_config: Optional[str] = None # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
+    episode: Optional[str] = None # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
+
 
     def save(self, path: str):
         with open(path, "w") as f:
@@ -272,13 +287,6 @@ if __name__ == "__main__":
         hparams = HParams.load_json(load_path)
     print(f"Logging hparams: {hparams}")
 
-    hparams = HParams(
-        dataset=DatasetConfig(),
-        model=ModelConfig(),
-        dpmoe=DPMoEConfig(),
-        train=TrainConfig(),
-        eval=EvalConfig(),
-        summary=SummaryConfig())
     method = CNDPM(hparams)
 
     results = setting.apply(method)
