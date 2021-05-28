@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, InitVar
 from pathlib import Path
 from typing import ClassVar, Tuple, Type, Dict, Any, Optional, List
 
@@ -67,8 +67,17 @@ class ObjectConfig:
 @dataclass
 class DatasetConfig:
     """Dataset Config."""
-    sleep_batch_size: int = 50
-    sleep_num_workers: int = 4
+    cndpm_config: InitVar[str] = None
+    sleep_batch_size: int = 60
+    sleep_num_workers: int = 5
+
+    def __post_init__(self, cndpm_config: str):
+        if cndpm_config is None:
+            self.sleep_batch_size = 60
+            self.sleep_num_workers = 5
+        elif cndpm_config == "mnist_gen-cndpm":
+            self.sleep_batch_size = 50
+            self.sleep_num_workers = 4
 
 @dataclass
 class ModelConfig:
@@ -160,17 +169,20 @@ class HParams(HyperParameters, FlattenedAccess):
     # def __setitem__(self, key: str, value: Any) -> None:
     #     setattr(self, key, value)
 
-    dataset: DatasetConfig = mutable_field(DatasetConfig)
+    disable_cuda: Optional[bool] = False  # Denotes whether to use CPU instead of CUDA device
+    cndpm_config: Optional[str] = None  # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
+    episode: Optional[str] = None  # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
+
+    # dataset: DatasetConfig = mutable_field(DatasetConfig)
+    dataset: DatasetConfig = None
     model: ModelConfig = mutable_field(ModelConfig)
     dpmoe: DPMoEConfig = mutable_field(DPMoEConfig)
     train: TrainConfig = mutable_field(TrainConfig)
     eval: EvalConfig = mutable_field(EvalConfig)
     summary: SummaryConfig = mutable_field(SummaryConfig)
 
-    disable_cuda: Optional[bool] = False # Denotes whether to use CPU instead of CUDA device
-    cndpm_config: Optional[str] = None # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
-    episode: Optional[str] = None # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
-
+    def __post_init__(self):
+        self.dataset = DatasetConfig(self.cndpm_config)
 
     def save(self, path: str):
         with open(path, "w") as f:
