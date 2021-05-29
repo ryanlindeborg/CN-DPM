@@ -68,14 +68,17 @@ class ObjectConfig:
 class DatasetConfig:
     """Dataset Config."""
     cndpm_config: InitVar[str] = None
-    sleep_batch_size: int = 60
-    sleep_num_workers: int = 5
+    sleep_batch_size: int = 50
+    sleep_num_workers: int = 4
 
     def __post_init__(self, cndpm_config: str):
         if cndpm_config is None:
-            self.sleep_batch_size = 60
-            self.sleep_num_workers = 5
+            self.sleep_batch_size = 50
+            self.sleep_num_workers = 4
         elif cndpm_config == "mnist_gen-cndpm":
+            self.sleep_batch_size = 50
+            self.sleep_num_workers = 4
+        elif cndpm_config == "mnist-cndpm":
             self.sleep_batch_size = 50
             self.sleep_num_workers = 4
 
@@ -84,29 +87,21 @@ class ModelConfig:
     """Model configuration."""
     model_name: str = "ndpm_model"
     g: str = "mlp_sharing_vae"
-    # d: Optional[str] = "mlp_sharing_classifier"
-    d: str = "mlp_sharing_classifier"
+    d: Optional[str] = "mlp_sharing_classifier"
     disable_d: bool = False
-    # d: Optional[str] = None
-    # disable_d: bool = True
     vae_nf_base: int = 64
     vae_nf_ext: int = 16
-    # cls_nf_base: Optional[int] = 64
-    # cls_nf_ext: Optional[int] = 16
-    cls_nf_base: int = 64
-    cls_nf_ext: int = 16
+    cls_nf_base: Optional[int] = 64
+    cls_nf_ext: Optional[int] = 16
     z_dim: int = 16
     z_samples: int = 16
 
 
     pretrained_init: Optional[Dict] = None
-    # precursor_conditioned_decoder: Optional[bool] = False
-    precursor_conditioned_decoder: bool = False
+    precursor_conditioned_decoder: Optional[bool] = None
     recon_loss: str = "gaussian"
-    # x_log_var_param: Optional[int] = 0
-    # learn_x_log_var: Optional[bool] = False
-    x_log_var_param: int = 0
-    learn_x_log_var: bool = False
+    x_log_var_param: Optional[int] = 0
+    learn_x_log_var: Optional[bool] = False
     classifier_chill: float = 0.01
 
 @dataclass
@@ -120,11 +115,10 @@ class DPMoEConfig:
     sleep_step_g: int = 8000
     sleep_step_d: int = 2000
     sleep_summary_step: int = 500
-    # update_min_usage: Optional[float] = 0.1
-    # send_to_stm_always: Optional[bool] = False
+
     known_destination: Optional[List] = None
     update_min_usage: float = 0.1
-    send_to_stm_always: bool = False
+    send_to_stm_always: Optional[bool] = None
 
 @dataclass
 class TrainConfig:
@@ -142,12 +136,9 @@ class TrainConfig:
 @dataclass
 class EvalConfig:
     """ Eval configuration. """
-    # eval_d: bool = False
     eval_d: bool = True
-    # eval_g: bool = True
     eval_g: bool = False
-    # eval_t: Optional[bool] = False
-    eval_t: bool = False
+    eval_t: Optional[bool] = False
 
 @dataclass
 class SummaryConfig:
@@ -155,6 +146,7 @@ class SummaryConfig:
     summary_step: int = 250
     eval_step: int = 250
     summarize_samples: bool = False
+    sample_grid: Optional[List] = None
 
 @dataclass
 class HParams(HyperParameters, FlattenedAccess):
