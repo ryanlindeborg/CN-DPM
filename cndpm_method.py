@@ -15,6 +15,8 @@ from sequoia.settings.passive import (
     PassiveEnvironment,
     PassiveSetting,
 )
+
+from simple_parsing.helpers import list_field
 from simple_parsing import ArgumentParser, mutable_field
 from simple_parsing.helpers.hparams import HyperParameters
 from simple_parsing.helpers.flatten import FlattenedAccess
@@ -64,38 +66,27 @@ class ObjectConfig:
     def __setitem__(self, key: str, value: Any) -> None:
         setattr(self, key, value)
 
+
 @dataclass
 class DatasetConfig:
     """Dataset Config."""
-    cndpm_config: InitVar[str] = None
     sleep_batch_size: int = 50
     sleep_num_workers: int = 4
 
-    def __post_init__(self, cndpm_config: str):
-        if cndpm_config is None:
-            self.sleep_batch_size = 50
-            self.sleep_num_workers = 4
-        elif cndpm_config == "mnist_gen-cndpm":
-            self.sleep_batch_size = 50
-            self.sleep_num_workers = 4
-        elif cndpm_config == "mnist-cndpm":
-            self.sleep_batch_size = 50
-            self.sleep_num_workers = 4
 
 @dataclass
 class ModelConfig:
     """Model configuration."""
     model_name: str = "ndpm_model"
     g: str = "mlp_sharing_vae"
-    d: Optional[str] = "mlp_sharing_classifier"
+    d: str = "mlp_sharing_classifier"
     disable_d: bool = False
     vae_nf_base: int = 64
     vae_nf_ext: int = 16
-    cls_nf_base: Optional[int] = 64
-    cls_nf_ext: Optional[int] = 16
+    cls_nf_base: int = 64
+    cls_nf_ext: int = 16
     z_dim: int = 16
     z_samples: int = 16
-
 
     pretrained_init: Optional[Dict] = None
     precursor_conditioned_decoder: Optional[bool] = None
@@ -103,6 +94,7 @@ class ModelConfig:
     x_log_var_param: Optional[int] = 0
     learn_x_log_var: Optional[bool] = False
     classifier_chill: float = 0.01
+
 
 @dataclass
 class DPMoEConfig:
@@ -116,9 +108,10 @@ class DPMoEConfig:
     sleep_step_d: int = 2000
     sleep_summary_step: int = 500
 
-    known_destination: Optional[List] = None
+    known_destination: Optional[List[int]] = None
     update_min_usage: float = 0.1
     send_to_stm_always: Optional[bool] = None
+
 
 @dataclass
 class TrainConfig:
@@ -133,6 +126,7 @@ class TrainConfig:
     lr_scheduler_d: ObjectConfig = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
     clip_grad: ObjectConfig = ObjectConfig(type="value", options={"clip_value": 0.5})
 
+
 @dataclass
 class EvalConfig:
     """ Eval configuration. """
@@ -146,46 +140,28 @@ class SummaryConfig:
     summary_step: int = 250
     eval_step: int = 250
     summarize_samples: bool = False
-    sample_grid: Optional[List] = None
+    sample_grid: List[int] = list_field(10, 10)
+
 
 @dataclass
 class HParams(HyperParameters, FlattenedAccess):
     """ Hyper-parameters of the CN-DPM model. """
 
-    # We could also pass a `HParams` object to the Model constructor, rather than a
-    # dictionary, and then just add a few methods like this to make it behave like
-    # a dict. Its probably easier to just convert this object to a dict though.
-    # def __getitem__(self, key: str):
-    #     return getattr(self, key)
-    #
-    # def __setitem__(self, key: str, value: Any) -> None:
-    #     setattr(self, key, value)
-
-    disable_cuda: Optional[bool] = False  # Denotes whether to use CPU instead of CUDA device
-    cndpm_config: Optional[str] = None  # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
+    # Denotes whether to use CPU instead of CUDA device
+    disable_cuda: bool = False
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    # # This config name (in conjunction with episode parameter) describes the setting in
+    # # which the CNDPM model is run, per the original repo labels (per original repo
+    # # labels)
+    # cndpm_config: Optional[str] = None
     episode: Optional[str] = None  # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
 
-    # dataset: DatasetConfig = mutable_field(DatasetConfig)
-    dataset: DatasetConfig = None
+    dataset: DatasetConfig = mutable_field(DatasetConfig)
     model: ModelConfig = mutable_field(ModelConfig)
     dpmoe: DPMoEConfig = mutable_field(DPMoEConfig)
     train: TrainConfig = mutable_field(TrainConfig)
     eval: EvalConfig = mutable_field(EvalConfig)
     summary: SummaryConfig = mutable_field(SummaryConfig)
-
-    def __post_init__(self):
-        self.dataset = DatasetConfig(self.cndpm_config)
-
-    def save(self, path: str):
-        with open(path, "w") as f:
-            config_dict = asdict(self)
-            json.dump(config_dict, f, indent=1)
-
-    @classmethod
-    def load(cls, path: str):
-        with open(path, "r") as f:
-            config_dict = json.load(f)
-            return cls(**config_dict)
 
 
 @register_method
@@ -197,18 +173,16 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
     ModelType: ClassVar[Type[NdpmModel]] = NdpmModel
 
-    def __init__(self, cn_dpm_config, learning_rate: float = 3e-4):
+    def __init__(self, hparams: HParams, learning_rate: float = 3e-4):
         # The cn_dpm_config here consists of the model hyperparameters
-        self.cn_dpm_config = cn_dpm_config
-        if self.cn_dpm_config["disable_cuda"]:
-            self.cn_dpm_config["device"] = "cpu"
-        else:
-            if torch.cuda.is_available():
-                self.cn_dpm_config["device"] = "cuda"
-            else:
-                self.cn_dpm_config["device"] = "cpu"
+        eval_steps = hparams.summary.eval_step
+        eval_steps = hparams.eval_step
+        
+        self.cn_dpm_config = hparams
+        if self.cn_dpm_config.disable_cuda:
+            self.cn_dpm_config.device = "cpu"
         self.learning_rate = learning_rate
-        self.device = self.cn_dpm_config["device"]
+        self.device = self.cn_dpm_config.device
 
         # We will create this when `configure` is called, before training.
         self.model: NdpmModel
@@ -274,7 +248,7 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 if __name__ == "__main__":
     setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)
 
-    parser = ArgumentParser()
+    parser = ArgumentParser(add_dest_to_option_strings=True)
     parser.add_argument(
         "--load_path",
         type=str,
