@@ -55,7 +55,6 @@ class Ndpm(nn.Module):
             self.stm_y.extend(torch.unbind(y.cpu()))
         else:
             # Determine the destination of each data point
-            print(f"*********************Collect nll: X: {x.size()}, y: {y.size()}")
             nll, summaries = self.experts[-1].collect_nll(x, y)  # [B, 1+K]
             nl_prior = self.prior.nl_prior()  # [1+K]
             nl_joint = nll + nl_prior.unsqueeze(0).expand(
@@ -282,7 +281,6 @@ class Ndpm(nn.Module):
     def _eval_discriminative_model(
             self,
             sequoia_env: Environment):
-        print("****Entered discriminative model fxn!!!!!!!!")
         training = self.training
         self.eval()
 
@@ -296,12 +294,10 @@ class Ndpm(nn.Module):
         correct_1 = 0.
         correct_k = 0.
 
-        # for step, (observations, rewards) in iter(sequoia_env):
         for (observations, rewards) in iter(sequoia_env):
             x: Tensor = observations.x
             t: Optional[Tensor] = observations.task_labels
             y: Optional[Tensor] = rewards.y if rewards is not None else None
-            print(f"!!!!!!!!!Eval dataloader iter(discriminative) x {x.size()}, y: {y.size()}")
             b = x.size(0)
             with torch.no_grad():
                 logits = self(x).view(b, -1)
@@ -330,7 +326,6 @@ class Ndpm(nn.Module):
     def _eval_generative_model(
             self,
             sequoia_env: Environment):
-        print("****Entered generative model fxn!!!!!!!!")
         # change the model to eval mode
         training = self.training
         z_samples = self.config['z_samples']
