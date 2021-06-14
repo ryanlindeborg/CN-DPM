@@ -91,8 +91,8 @@ class ModelConfig:
     pretrained_init: Optional[Dict] = None
     precursor_conditioned_decoder: Optional[bool] = None
     recon_loss: str = "gaussian"
-    x_log_var_param: Optional[int] = 0
-    learn_x_log_var: Optional[bool] = False
+    x_log_var_param: int = 0
+    learn_x_log_var: bool = False
     classifier_chill: float = 0.01
 
 
@@ -119,10 +119,8 @@ class TrainConfig:
     weight_decay: float = 0.00001
     implicit_lr_decay: bool = False
     optimizer_g: ObjectConfig = ObjectConfig(type="Adam", options={"lr": 0.0004})
-    # optimizer_d: Optional[ObjectConfig] = ObjectConfig(type="Adam", options={"lr": 0.0001})
     optimizer_d: ObjectConfig = ObjectConfig(type="Adam", options={"lr": 0.0001})
     lr_scheduler_g: ObjectConfig = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
-    # lr_scheduler_d: Optional[ObjectConfig] = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
     lr_scheduler_d: ObjectConfig = ObjectConfig(type="MultiStepLR", options={"milestones": [1], "gamma": 1.0})
     clip_grad: ObjectConfig = ObjectConfig(type="value", options={"clip_value": 0.5})
 
@@ -132,7 +130,7 @@ class EvalConfig:
     """ Eval configuration. """
     eval_d: bool = True
     eval_g: bool = False
-    eval_t: Optional[bool] = False
+    eval_t: bool = False
 
 @dataclass
 class SummaryConfig:
@@ -140,7 +138,8 @@ class SummaryConfig:
     summary_step: int = 250
     eval_step: int = 250
     summarize_samples: bool = False
-    sample_grid: List[int] = list_field(10, 10)
+    sample_grid: Optional[List[int]] = None
+    # sample_grid: List[int] = list_field(10, 10)
 
 
 @dataclass
@@ -150,11 +149,6 @@ class HParams(HyperParameters, FlattenedAccess):
     # Denotes whether to use CPU instead of CUDA device
     disable_cuda: bool = False
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    # # This config name (in conjunction with episode parameter) describes the setting in
-    # # which the CNDPM model is run, per the original repo labels (per original repo
-    # # labels)
-    # cndpm_config: Optional[str] = None
-    episode: Optional[str] = None  # This config name (in conjunction with episode parameter) describes the setting in which the CNDPM model is run, per the original repo labels (per original repo labels)
 
     dataset: DatasetConfig = mutable_field(DatasetConfig)
     model: ModelConfig = mutable_field(ModelConfig)
@@ -175,9 +169,6 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
     def __init__(self, hparams: HParams, learning_rate: float = 3e-4):
         # The cn_dpm_config here consists of the model hyperparameters
-        eval_steps = hparams.summary.eval_step
-        eval_steps = hparams.eval_step
-        
         self.cn_dpm_config = hparams
         if self.cn_dpm_config.disable_cuda:
             self.cn_dpm_config.device = "cpu"
@@ -246,7 +237,9 @@ class CNDPM(Method, target_setting=ClassIncrementalSetting):
 
 
 if __name__ == "__main__":
-    setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)
+    # setting = ClassIncrementalSetting(dataset="mnist", nb_tasks=5)
+    setting = ClassIncrementalSetting(dataset="fashionmnist", nb_tasks=5)
+    # setting = ClassIncrementalSetting(dataset="cifar10", nb_tasks=5)
 
     parser = ArgumentParser(add_dest_to_option_strings=True)
     parser.add_argument(
