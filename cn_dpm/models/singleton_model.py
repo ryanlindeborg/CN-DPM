@@ -1,8 +1,9 @@
-from tensorboardX import SummaryWriter
-from .base import Model
-from components import G, D
-from components.component import ComponentD
 import torch
+from cn_dpm.components import D, G
+from cn_dpm.components.component import ComponentD
+from tensorboardX import SummaryWriter
+
+from .base import Model
 
 
 class SingletonModel(Model):

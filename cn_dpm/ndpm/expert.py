@@ -1,11 +1,11 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
-from .summaries import (
-    Summaries,
-)
-from components.component import ComponentG, ComponentD
-from components import G, D
-from typing import Tuple
+from cn_dpm.components import D, G
+from cn_dpm.components.component import ComponentD, ComponentG
+
+from .summaries import Summaries
 
 
 class Expert(nn.Module):
@@ -14,11 +14,11 @@ class Expert(nn.Module):
         self.config = config
         self.id = len(experts)
         self.experts = experts
-        self.device = config['device'] if 'device' in config else 'cuda'
+        self.device = config["device"]
 
-        self.g: ComponentG = G[config['g']](config, experts)
+        self.g: ComponentG = G[config["g"]](config, experts)
         self.d: ComponentD = (
-            D[config['d']](config, experts) if not config['disable_d'] else None
+            D[config["d"]](config, experts) if not config["disable_d"] else None
         )
 
         # use random initialized g if it's a placeholder
@@ -33,11 +33,9 @@ class Expert(nn.Module):
                 p.requires_grad = False
 
         # otherwise use pretrained weights if provided
-        if config.get('pretrained_init') is not None:
-            state_dict = torch.load(config['pretrained_init'])
-            state_dict = {
-                k.split('component.')[1]: v for k, v in state_dict.items()
-            }
+        if config["pretrained_init"] is not None:
+            state_dict = torch.load(config["pretrained_init"])
+            state_dict = {k.split("component.")[1]: v for k, v in state_dict.items()}
             self.g.load_state_dict(state_dict)
 
     def forward(self, x):
@@ -50,7 +48,7 @@ class Expert(nn.Module):
             d_nll, d_summaries = self.d.nll(x, y, step)
             nll = nll + d_nll
             summaries = summaries + d_summaries
-            summaries.add_tensor_summary('loss/total', nll.mean(), 'scalar')
+            summaries.add_tensor_summary("loss/total", nll.mean(), "scalar")
         return nll, summaries
 
     def collect_nll(self, x, y, step=None):
@@ -67,8 +65,7 @@ class Expert(nn.Module):
             new_summaries = []
             for i, (g_s, d_s) in enumerate(zip(summaries, d_summaries)):
                 new_summary = g_s + d_s
-                new_summary.add_tensor_summary(
-                    'loss/total', nll[:, i].mean(), 'scalar')
+                new_summary.add_tensor_summary("loss/total", nll[:, i].mean(), "scalar")
                 new_summaries.append(new_summary)
             summaries = new_summaries
         return nll, summaries

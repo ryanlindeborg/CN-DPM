@@ -6,12 +6,12 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import List, Tuple
 
-from ndpm.summaries import VaeSummaries
-from loss import bernoulli_nll, logistic_nll, gaussian_nll, laplace_nll
+from cn_dpm.ndpm.summaries import VaeSummaries
+from cn_dpm.loss import bernoulli_nll, logistic_nll, gaussian_nll, laplace_nll
 from torch.nn.functional import relu
 from .component import ComponentG
 from .classifier import conv4x4t, conv1x1, BasicBlock
-from utils import Lambda
+from cn_dpm.utils import Lambda
 
 
 class Vae(ComponentG, ABC):
@@ -152,7 +152,7 @@ class SharingVae(Vae, ABC):
         x_logits = []
         for z_mean, z_log_var, vae in zip(z_means, z_log_vars, vaes):
             z = self.reparameterize(z_mean, z_log_var, self.config['z_samples'])
-            if self.config.get('precursor_conditioned_decoder'):
+            if self.config["precursor_conditioned_decoder"]:
                 x_logit = vae.decode(z, as_logit=True)
                 x_logits.append(x_logit)
                 continue

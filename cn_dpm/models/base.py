@@ -8,11 +8,10 @@ from torch import nn as nn
 # ==========
 
 class Model(nn.Module, ABC):
-    def __init__(self, config, writer: SummaryWriter):
+    def __init__(self, config):
         super().__init__()
         self.config = config
         self.device = config['device']
-        self.writer = writer
 
     @abstractmethod
     def forward(self, x):

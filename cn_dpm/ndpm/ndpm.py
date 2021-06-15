@@ -1,13 +1,19 @@
-from tensorboardX import SummaryWriter
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler
+from torch import Tensor
+from typing import Optional
 from .expert import Expert
 from .priors import CumulativePrior
 
+from sequoia.settings import Environment
+
+from functools import reduce
+import math
+
 
 class Ndpm(nn.Module):
-    def __init__(self, config, writer: SummaryWriter):
+    def __init__(self, config):
         super().__init__()
         self.config = config
         self.experts = nn.ModuleList([Expert(config)])
@@ -16,8 +22,7 @@ class Ndpm(nn.Module):
         self.stm_y = []
         self.stm_next_erase = config['stm_erase_period']
         self.prior = CumulativePrior(config)
-        self.device = config['device'] if 'device' in config else 'cuda'
-        self.writer = writer
+        self.device = config['device']
 
     def get_experts(self):
         return tuple(self.experts.children())
@@ -45,7 +50,7 @@ class Ndpm(nn.Module):
         summarize = step % self.config['summary_step'] == 0
         x, y = x.to(self.device), y.to(self.device)
 
-        if self.config.get('send_to_stm_always'):
+        if self.config["send_to_stm_always"]:
             self.stm_x.extend(torch.unbind(x.cpu()))
             self.stm_y.extend(torch.unbind(y.cpu()))
         else:
@@ -56,36 +61,16 @@ class Ndpm(nn.Module):
                 nll.size(0), -1)  # [B, 1+K]
 
             if summarize:
-                for i, summary in enumerate(summaries):
-                    summary.write(self.writer, step, postfix='/{}'.format(i))
+                # for i, summary in enumerate(summaries):
+                #     summary.write(self.writer, step, postfix='/{}'.format(i))
 
                 mean_nl_joint = nl_joint.detach().mean(dim=0)
                 if len(self.experts) > 1:
                     nl_joint_ndpm = nl_joint.detach()[:, 1:].min(dim=1)[0]
-                    self.writer.add_scalar(
-                        'nl_joint/ndpm/max', nl_joint_ndpm.max(dim=0)[0], step)
-                    self.writer.add_scalar(
-                        'nl_joint/ndpm/mean', nl_joint_ndpm.mean(dim=0), step)
-                for k, expert in enumerate(self.experts):
-                    self.writer.add_scalar(
-                        'data counts per expert/%s' % expert.id,
-                        self.prior.counts[k], step)
-                    self.writer.add_scalar(
-                        'nl_prior/%s' % expert.id, nl_prior[k], step)
-                    self.writer.add_scalar(
-                        'nl_joint/%s' % expert.id, mean_nl_joint[k], step)
-                    self.writer.add_histogram(
-                        'nl_joint_dist/%s' % expert.id, nl_joint[:, k], step)
-                    self.writer.add_scalar(
-                        'nl_cond/%s' % expert.id,
-                        mean_nl_joint[k] - nl_prior[k], step)
-                    self.writer.add_histogram(
-                        'nl_cond_dist/%s' % expert.id,
-                        nl_joint[:, k] - nl_prior[k], step)
 
             # Save to short-term memory
             destination = torch.argmin(nl_joint, dim=1).to(self.device)  # [B]
-            if 'known_destination' in self.config:
+            if self.config["known_destination"]:
                 destination = torch.tensor(self.config['known_destination'])[y]
                 destination = torch.where(
                     destination >= len(self.experts),
@@ -109,7 +94,7 @@ class Ndpm(nn.Module):
                 to_expert = \
                     to_expert / (to_expert.sum(dim=1).view(-1, 1) + 1e-7)
 
-            if 'known_destination' in self.config:
+            if self.config["known_destination"]:
                 to_expert = torch.eye(len(self.experts))[destination]
                 to_expert = to_expert.to(self.device)
 
@@ -128,7 +113,7 @@ class Ndpm(nn.Module):
             loss = losses.sum()
 
             if loss.requires_grad:
-                if 'update_min_usage' in self.config:
+                if self.config['update_min_usage']:
                     update_threshold = self.config['update_min_usage']
                 else:
                     update_threshold = 0
@@ -195,9 +180,9 @@ class Ndpm(nn.Module):
             expert.g.optimizer.step()
 
             if step % self.config['sleep_summary_step'] == 0:
-                g_summary.write(
-                    self.writer, step,
-                    prefix='sleep_g_', postfix='/{}'.format(expert.id))
+                # g_summary.write(
+                #     self.writer, step,
+                #     prefix='sleep_g_', postfix='/{}'.format(expert.id))
                 print('\r   [Sleep-G %6d] loss: %5.1f' % (
                     step, g_loss.mean()
                 ), end='')
@@ -208,9 +193,9 @@ class Ndpm(nn.Module):
                             dream_val_x)
                     val_summary_g.add_tensor_summary(
                         'loss/total', val_loss_g, 'histogram')
-                    val_summary_g.write(self.writer, step,
-                                        prefix='sleep_val_g_',
-                                        postfix='/{}'.format(expert.id))
+                    # val_summary_g.write(self.writer, step,
+                    #                     prefix='sleep_val_g_',
+                    #                     postfix='/{}'.format(expert.id))
         print()
 
         dream_iterator = iter(DataLoader(
@@ -240,9 +225,9 @@ class Ndpm(nn.Module):
                 expert.d.optimizer.step()
 
                 if step % self.config['sleep_summary_step'] == 0:
-                    d_summary.write(
-                        self.writer, step,
-                        prefix='sleep_d_', postfix='/{}'.format(expert.id))
+                    # d_summary.write(
+                    #     self.writer, step,
+                    #     prefix='sleep_d_', postfix='/{}'.format(expert.id))
                     print('\r   [Sleep-D %6d] loss: %5.1f' % (
                         step, d_loss.mean()
                     ), end='')
@@ -251,8 +236,6 @@ class Ndpm(nn.Module):
                     with torch.no_grad():
                         pred = expert(x).argmax(1)
                     acc = (pred == y).float().mean()
-                    self.writer.add_scalar(
-                        'sleep_d_accuracy/%d' % expert.id, acc, step)
 
                     if self.config['sleep_val_size'] != 0:
                         with torch.no_grad():
@@ -260,16 +243,14 @@ class Ndpm(nn.Module):
                                 dream_val_x, dream_val_y)
                         val_summary_d.add_tensor_summary(
                             'loss/total', val_loss_d.mean(), 'scalar')
-                        val_summary_d.write(self.writer, step,
-                                            prefix='sleep_val_d',
-                                            postfix='/{}'.format(expert.id))
+                        # val_summary_d.write(self.writer, step,
+                        #                     prefix='sleep_val_d',
+                        #                     postfix='/{}'.format(expert.id))
 
                         # Validation accuracy
                         with torch.no_grad():
                             pred = expert(dream_val_x).argmax(1)
                         acc = (pred.cpu() == dream_val_y).float().mean()
-                        self.writer.add_scalar(
-                            'sleep_val_d_accuracy/%d' % expert.id, acc, step)
 
         expert.lr_scheduler_step()
         expert.lr_scheduler_step()
@@ -286,3 +267,175 @@ class Ndpm(nn.Module):
     def train(self, mode=True):
         # Disabled
         pass
+
+    def evaluate_model(self, sequoia_env):
+        if self.config['eval_d']:
+            self._eval_discriminative_model(sequoia_env)
+        if self.config['eval_g']:
+            self._eval_generative_model(sequoia_env)
+        if self.config['eval_t']:
+            self._eval_hard_assign(
+                sequoia_env
+            )
+
+    def _eval_discriminative_model(
+            self,
+            sequoia_env: Environment):
+        training = self.training
+        self.eval()
+
+        K = 5
+        totals = []
+        corrects_1 = []
+        corrects_k = []
+
+        # Accuracy of each subset
+        total = 0.
+        correct_1 = 0.
+        correct_k = 0.
+
+        for (observations, rewards) in iter(sequoia_env):
+            x: Tensor = observations.x
+            t: Optional[Tensor] = observations.task_labels
+            y: Optional[Tensor] = rewards.y if rewards is not None else None
+            b = x.size(0)
+            with torch.no_grad():
+                logits = self(x).view(b, -1)
+            # [B, K]
+            _, pred_topk = logits.topk(K, dim=1)
+            correct_topk = (
+                pred_topk.cpu() == y.view(b, -1).expand_as(pred_topk)
+            ).float()
+            correct_1 += correct_topk[:, :1].view(-1).cpu().sum()
+            correct_k += correct_topk[:, :K].view(-1).cpu().sum()
+            total += x.size(0)
+        totals.append(total)
+        corrects_1.append(correct_1)
+        corrects_k.append(correct_k)
+        accuracy_1 = correct_1 / total
+        accuracy_k = correct_k / total
+
+        # Overall accuracy
+        total = sum(totals)
+        correct_1 = sum(corrects_1)
+        correct_k = sum(corrects_k)
+        accuracy_1 = correct_1 / total
+        accuracy_k = correct_k / total
+        self.train(training)
+
+    def _eval_generative_model(
+            self,
+            sequoia_env: Environment):
+        # change the model to eval mode
+        training = self.training
+        z_samples = self.config['z_samples']
+        self.eval()
+        self.config['z_samples'] = 16
+        # evaluate generative model on each subset
+        subset_counts = []
+        subset_cumulative_bpds = []
+        subset_count = 0
+        subset_cumulative_bpd = 0
+        # evaluate on a subset
+        for (observations, _) in iter(sequoia_env):
+            x: Tensor = observations.x
+            dim = reduce(lambda x, y: x * y, x.size()[1:])
+            with torch.no_grad():
+                ll = self(x)
+            bpd = -ll / math.log(2) / dim
+            subset_count += x.size(0)
+            subset_cumulative_bpd += bpd.sum()
+        # append the subset evaluation result
+        subset_counts.append(subset_count)
+        subset_cumulative_bpds.append(subset_cumulative_bpd)
+        subset_bpd = subset_cumulative_bpd / subset_count
+        # Overall accuracy
+        overall_bpd = sum(subset_cumulative_bpds) / sum(subset_counts)
+        # roll back the mode
+        self.train(training)
+        self.config['z_samples'] = z_samples
+
+    def _eval_hard_assign(
+            self,
+            sequoia_env: Environment, task_index=None,
+    ):
+        print("Entered hard assign model fxn")
+        # TODO: Should we have option to hard assign tasks or can we achieve just using sequoia env?
+        # tasks = [
+        #     tuple([c for _, c in t['subsets']])
+        #     for t in self.config['data_schedule']
+        # ]
+        # if task_index is not None:
+        #     tasks = [tasks[task_index]]
+        k = 5
+
+        # Overall counts
+        total_overall = 0.
+        correct_1_overall = 0.
+        correct_k_overall = 0.
+        correct_expert_overall = 0.
+        correct_assign_overall = 0.
+
+        # Loop over each task
+        # for task_index, task_subsets in enumerate(tasks, task_index or 0):
+        # Task-wise counts
+        total = 0.
+        correct_1 = 0.
+        correct_k = 0.
+        correct_expert = 0.
+        correct_assign = 0.
+
+            # Loop over each subset
+            # for subset in task_subsets:
+            #     data = DataLoader(
+            #         self.subsets[subset],
+            #         batch_size=self.config['eval_batch_size'],
+            #         num_workers=self.config['eval_num_workers'],
+            #         collate_fn=self.collate_fn,
+            #     )
+        for (observations, rewards) in iter(sequoia_env):
+            x: Tensor = observations.x
+            t: Optional[Tensor] = observations.task_labels
+            y: Optional[Tensor] = rewards.y if rewards is not None else None
+            with torch.no_grad():
+                logits, assignments = self(
+                    x, return_assignments=True)
+            total += x.size(0)
+            correct_assign += (assignments == task_index).float().sum()
+            if not self.config['disable_d']:
+                # NDPM accuracy
+                _, pred_topk = logits.topk(k, dim=1)
+                correct_topk = (
+                    pred_topk.cpu()
+                    == y.unsqueeze(1).expand_as(pred_topk)
+                ).float()
+                correct_1 += correct_topk[:, :1].view(-1).sum()
+                correct_k += correct_topk[:, :k].view(-1).sum()
+
+                # Hard-assigned expert accuracy
+                num_experts = len(self.ndpm.experts) - 1
+                if num_experts > task_index:
+                    expert = self.ndpm.experts[task_index + 1]
+                    with torch.no_grad():
+                        logits = expert(x)
+                    correct = (y == logits.argmax(dim=1).cpu()).float()
+                    correct_expert += correct.sum()
+
+            # Add to overall counts
+            total_overall += total
+            correct_1_overall += correct_1
+            correct_k_overall += correct_k
+            correct_expert_overall += correct_expert
+            correct_assign_overall += correct_assign
+
+            # Task-wise accuracies
+            accuracy_1 = correct_1 / total
+            accuracy_k = correct_k / total
+            accuracy_expert = correct_expert / total
+            accuracy_assign = correct_assign / total
+
+        # Overall accuracies
+        accuracy_1 = correct_1_overall / total_overall
+        accuracy_k = correct_k_overall / total_overall
+        accuracy_expert = correct_expert_overall / total_overall
+        accuracy_assign = correct_assign_overall / total_overall

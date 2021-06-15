@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch import Tensor, autograd
-from ndpm.summaries import Summaries, VaeSummaries, ClassificationSummaries
+from cn_dpm.ndpm.summaries import Summaries, VaeSummaries, ClassificationSummaries
 from typing import Tuple, List
 
 
@@ -11,7 +11,7 @@ class Component(nn.Module, ABC):
     def __init__(self, config, experts: Tuple):
         super().__init__()
         self.config = config
-        self.device = config['device'] if 'device' in config else 'cuda'
+        self.device = config['device']
 
         self.experts = experts
 

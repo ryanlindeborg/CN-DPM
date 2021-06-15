@@ -3,9 +3,9 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
-from ndpm.summaries import ClassificationSummaries
+from cn_dpm.ndpm.summaries import ClassificationSummaries
 from .component import ComponentD
-from utils import Lambda
+from cn_dpm.utils import Lambda
 
 
 class Classifier(ComponentD, ABC):
@@ -274,11 +274,11 @@ class ResNetClassifier(Classifier):
 
     def __init__(self, config, experts):
         super(ResNetClassifier, self).__init__(config, experts)
-        if 'num_blocks' in config:
+        if getattr(config, 'num_blocks', None):
             num_blocks = config['num_blocks']
         else:
             num_blocks = self.num_blocks
-        if 'norm_layer' in config:
+        if getattr(config, 'norm_layer', None):
             self.norm_layer = getattr(nn, config['norm_layer'])
         else:
             self.norm_layer = nn.BatchNorm2d
@@ -336,11 +336,11 @@ class ResNetSharingClassifier(SharingClassifier):
         self.precursors = [expert.d for expert in self.experts[1:]]
         first = len(self.precursors) == 0
 
-        if 'num_blocks' in config:
+        if getattr(config, 'num_blocks', None):
             num_blocks = config['num_blocks']
         else:
             num_blocks = self.num_blocks
-        if 'norm_layer' in config:
+        if getattr(config, 'norm_layer', None):
             self.norm_layer = getattr(nn, config['norm_layer'])
         else:
             self.norm_layer = nn.BatchNorm2d

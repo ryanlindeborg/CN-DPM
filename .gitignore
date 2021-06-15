@@ -121,3 +121,7 @@ venv.bak/
 
 # model inference results
 .out
+
+# ADDED VALUES (@lebrice, @ryanlindeborg)
+**/*.egg-info
+.vscode
