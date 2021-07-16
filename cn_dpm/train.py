@@ -3,7 +3,7 @@ import pickle
 from typing import Optional
 
 import torch
-from sequoia.settings.passive import ClassIncrementalSetting, PassiveEnvironment
+from sequoia.settings.sl import ContinualSLSetting, SLEnvironment
 from torch import Tensor
 
 from .data import DataScheduler
@@ -21,13 +21,13 @@ def _make_collage(samples, config, grid_h, grid_w):
 
 
 def train_model_with_sequoia_env(
-    config, model: NdpmModel, sequoia_env: PassiveEnvironment
+    config, model: NdpmModel, sequoia_env: SLEnvironment
 ):
     model.train()
     # NOTE: This is just here to show the types of the `observations` and `rewards` that
     # are yielded below.
-    observations: ClassIncrementalSetting.Observations
-    rewards: Optional[ClassIncrementalSetting.Rewards]
+    observations: ContinualSLSetting.Observations
+    rewards: Optional[ContinualSLSetting.Rewards]
     for step, (observations, rewards) in enumerate(sequoia_env):
         x: Tensor = observations.x
         t: Optional[Tensor] = observations.task_labels

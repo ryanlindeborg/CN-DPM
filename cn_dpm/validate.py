@@ -1,14 +1,15 @@
 from typing import Optional
 from torch import Tensor
 from .models import NdpmModel
-from sequoia.settings.passive import ClassIncrementalSetting, PassiveEnvironment
+from sequoia.settings.sl import ContinualSLSetting, SLEnvironment
 
 
-def validate_model(config, model: NdpmModel, sequoia_env: PassiveEnvironment):
-    assert len(model.ndpm.experts) > 1
+def validate_model(config, model: NdpmModel, sequoia_env: SLEnvironment):
+    # TODO: Why > instead of >=?
+    assert len(model.ndpm.experts) >= 1
     model.eval()
-    observations: ClassIncrementalSetting.Observations
-    rewards: Optional[ClassIncrementalSetting.Rewards]
+    observations: ContinualSLSetting.Observations
+    rewards: Optional[ContinualSLSetting.Rewards]
     model.ndpm.evaluate_model(sequoia_env)
         
     """
