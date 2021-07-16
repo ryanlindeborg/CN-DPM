@@ -5,9 +5,9 @@ import yaml
 import resource
 import torch
 from tensorboardX import SummaryWriter
-from data import DataScheduler
-from models import MODEL
-from train import train_model
+from cn_dpm.data import DataScheduler
+from cn_dpm.models import MODEL
+from cn_dpm.train import train_model
 
 
 # Increase maximum number of open files from 1024 to 4096

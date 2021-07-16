@@ -22,6 +22,11 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    entry_points={
+        "Method": [
+            "cndpm = cn_dpm.cndpm_method:CNDPM",
+        ],
+    },
     python_requires='>=3.7',
     install_requires=[
         "tensorboardx",
