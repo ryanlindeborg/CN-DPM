@@ -1,3 +1,8 @@
+
+**This fork makes the CN-DPM algorithm available as a Method in [Sequoia](https://www.github.com/lebrice/Sequoia).**
+
+Original README:
+
 # Continual Neural Dirichlet Process Mixture
 Official PyTorch implementation of ICLR 2020 paper: *A Neural Dirichlet Process Mixture Model for Task-Free Continual Learning*.
 
