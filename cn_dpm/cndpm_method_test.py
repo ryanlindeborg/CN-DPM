@@ -13,6 +13,12 @@ from cn_dpm.models.ndpm_model import NdpmModel
 
 
 class TestCNDPMMethod(MethodTests):
+    """ Tests for the CN-DPM Method.
+    
+    The main test of interest is `test_debug`, which is implemented in the MethodTests
+    class.
+    """
+    
     Method: ClassVar[Type[CNDPM]] = CNDPM
 
     @pytest.mark.skip(reason="A bit too long to run")
@@ -44,6 +50,32 @@ class TestCNDPMMethod(MethodTests):
         new method).
         """
         debug_hparams = HParams(device=config.device)
+        if config.debug:
+            # TODO: Set the parameters for a debugging run on a short setting!
+            # (Need runs to be shorter than 30 secs per setting!)
+            debug_hparams.dpmoe = DPMoEConfig(
+                stm_capacity=50,
+                send_to_stm_always=True,
+                sleep_step_g=100,
+                sleep_step_d=100,
+            )
+            # Just for reference:
+            # @dataclass
+            # class DPMoEConfig:
+            #     """Configuration of the Dirichlet Process Mixture of Experts Model. """
+            #     log_alpha: int = -400
+            #     stm_capacity: int = 500
+            #     sleep_val_size: int = 0
+            #     stm_erase_period: int = 0
+
+            #     sleep_step_g: int = 8000
+            #     sleep_step_d: int = 2000
+            #     sleep_summary_step: int = 500
+
+            #     known_destination: Optional[List[int]] = None
+            #     update_min_usage: float = 0.1
+            #     send_to_stm_always: Optional[bool] = None         
+
         return cls.Method(debug_hparams)
 
     def validate_results(self,
