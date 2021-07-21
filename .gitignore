@@ -125,3 +125,4 @@ venv.bak/
 # ADDED VALUES (@lebrice, @ryanlindeborg)
 **/*.egg-info
 .vscode
+temp/

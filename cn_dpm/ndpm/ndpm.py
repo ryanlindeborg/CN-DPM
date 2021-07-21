@@ -7,9 +7,12 @@ from .expert import Expert
 from .priors import CumulativePrior
 
 from sequoia.settings import Environment
-
+from sequoia.settings.sl import ContinualSLSetting
 from functools import reduce
 import math
+
+
+Actions = ContinualSLSetting.Actions
 
 
 class Ndpm(nn.Module):
@@ -162,8 +165,8 @@ class Ndpm(nn.Module):
                 dream_dataset,
                 replacement=True,
                 num_samples=(
-                        self.config['sleep_step_g'] *
-                        self.config['sleep_batch_size']
+                    self.config['sleep_step_g'] *
+                    self.config['sleep_batch_size']
                 ))
         ))
 
@@ -206,8 +209,8 @@ class Ndpm(nn.Module):
                 dream_dataset,
                 replacement=True,
                 num_samples=(
-                        self.config['sleep_step_d'] *
-                        self.config['sleep_batch_size'])
+                    self.config['sleep_step_d'] *
+                    self.config['sleep_batch_size'])
             )
         ))
 
@@ -269,18 +272,18 @@ class Ndpm(nn.Module):
         pass
 
     def evaluate_model(self, sequoia_env):
+        metrics = {}
         if self.config['eval_d']:
-            self._eval_discriminative_model(sequoia_env)
+            metrics["eval_d"] = self._eval_discriminative_model(sequoia_env)
         if self.config['eval_g']:
-            self._eval_generative_model(sequoia_env)
+            metrics["eval_g"] = self._eval_generative_model(sequoia_env)
         if self.config['eval_t']:
-            self._eval_hard_assign(
-                sequoia_env
-            )
+            metrics["eval_t"] = self._eval_hard_assign(sequoia_env)
+        return metrics
 
     def _eval_discriminative_model(
             self,
-            sequoia_env: Environment):
+            env: Environment):
         training = self.training
         self.eval()
 
@@ -294,20 +297,26 @@ class Ndpm(nn.Module):
         correct_1 = 0.
         correct_k = 0.
 
-        for (observations, rewards) in iter(sequoia_env):
+        for (observations, rewards) in iter(env):
             x: Tensor = observations.x
             t: Optional[Tensor] = observations.task_labels
             y: Optional[Tensor] = rewards.y if rewards is not None else None
+
             b = x.size(0)
             with torch.no_grad():
                 logits = self(x).view(b, -1)
+
+            if rewards is None:
+                y_pred = logits.argmax(-1)
+                rewards = env.send(Actions(y_pred=y_pred))
+
             # [B, K]
             _, pred_topk = logits.topk(K, dim=1)
             correct_topk = (
-                pred_topk.cpu() == y.view(b, -1).expand_as(pred_topk)
+                pred_topk == y.view(b, -1).expand_as(pred_topk)
             ).float()
-            correct_1 += correct_topk[:, :1].view(-1).cpu().sum()
-            correct_k += correct_topk[:, :K].view(-1).cpu().sum()
+            correct_1 += correct_topk[:, :1].view(-1).sum()
+            correct_k += correct_topk[:, :K].view(-1).sum()
             total += x.size(0)
         totals.append(total)
         corrects_1.append(correct_1)
@@ -322,6 +331,10 @@ class Ndpm(nn.Module):
         accuracy_1 = correct_1 / total
         accuracy_k = correct_k / total
         self.train(training)
+        return {
+            "accuracy_1": accuracy_1,
+            "accuracy_k": accuracy_k
+        }
 
     def _eval_generative_model(
             self,
@@ -385,14 +398,14 @@ class Ndpm(nn.Module):
         correct_expert = 0.
         correct_assign = 0.
 
-            # Loop over each subset
-            # for subset in task_subsets:
-            #     data = DataLoader(
-            #         self.subsets[subset],
-            #         batch_size=self.config['eval_batch_size'],
-            #         num_workers=self.config['eval_num_workers'],
-            #         collate_fn=self.collate_fn,
-            #     )
+        # Loop over each subset
+        # for subset in task_subsets:
+        #     data = DataLoader(
+        #         self.subsets[subset],
+        #         batch_size=self.config['eval_batch_size'],
+        #         num_workers=self.config['eval_num_workers'],
+        #         collate_fn=self.collate_fn,
+        #     )
         for (observations, rewards) in iter(sequoia_env):
             x: Tensor = observations.x
             t: Optional[Tensor] = observations.task_labels
