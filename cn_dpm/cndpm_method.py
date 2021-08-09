@@ -136,15 +136,16 @@ class CNDPM(Method, target_setting=ContinualSLSetting):
             default=None,
             help="If given, the HyperParameters are read from the given file instead of from the command-line."
         )
-        parser.add_arguments(HParams, dest="hparams")
-        args = parser.parse_args()
 
+    @classmethod
+    def from_argparse_args(cls, args, dest: str = None) -> "CNDPM":
+        args = getattr(args, dest) if dest else args
         load_path: str = args.load_path
-        if load_path is None:
-            hparams: HParams = args.hparams
-        else:
+        hparams: HParams = args.hparams
+        if load_path:
             hparams = HParams.load_json(load_path)
         print(f"Logging hparams: {hparams}")
+        return CNDPM(hparams=hparams)
 
 
 if __name__ == "__main__":
