@@ -22,6 +22,9 @@ class Classifier(ComponentD, ABC):
             -> (Tensor, ClassificationSummaries):
         x, y = x.to(self.device), y.to(self.device)
         log_softmax = self.forward(x)
+        if y.dim() == 2:
+            assert y.shape[-1] == 1, (y, y.shape)
+            y = y.reshape([-1])
         loss_pred = self.ce_loss(log_softmax, y)
 
         # Classifier chilling
