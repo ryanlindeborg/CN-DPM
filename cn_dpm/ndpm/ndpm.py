@@ -311,7 +311,8 @@ class Ndpm(nn.Module):
                 rewards = env.send(Actions(y_pred=y_pred))
 
             # [B, K]
-            _, pred_topk = logits.topk(K, dim=1)
+            k = min(K, logits.shape[1])
+            _, pred_topk = logits.topk(k, dim=1)
             correct_topk = (
                 pred_topk == y.view(b, -1).expand_as(pred_topk)
             ).float()

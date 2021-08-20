@@ -55,9 +55,9 @@ class TestCNDPMMethod(MethodTests):
             # (Need runs to be shorter than 30 secs per setting!)
             debug_hparams.dpmoe = DPMoEConfig(
                 stm_capacity=50,
-                send_to_stm_always=True,
-                sleep_step_g=100,
-                sleep_step_d=100,
+                send_to_stm_always=False,
+                sleep_step_g=10,
+                sleep_step_d=10,
             )
             # Just for reference:
             # @dataclass
@@ -77,6 +77,17 @@ class TestCNDPMMethod(MethodTests):
             #     send_to_stm_always: Optional[bool] = None         
 
         return cls.Method(debug_hparams)
+
+    @pytest.mark.timeout(60)
+    def test_debug(self, method: CNDPM, setting: Setting, config: Config):
+        """ Apply the Method onto a setting, and validate the results. """
+        # FIXME: CN-DPM isn't currently able to handle the 'online training performance'
+        # version of the setting: It assumes that x and y will always be available at
+        # the same time.
+        setting.monitor_training_performance = False
+        results: Setting.Results = setting.apply(method, config=config)
+
+        self.validate_results(setting=setting, method=method, results=results)
 
     def validate_results(self,
                          setting: Setting,

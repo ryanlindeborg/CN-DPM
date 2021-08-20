@@ -1,25 +1,10 @@
 """
-TODO: (medium-priority) Create a `Config` or `HParams` dataclass containing the
-hyper-parameters of the model, which are currently all defined inside the config
-files.
+Dataclasses containing the hyper-parameters of the model, which are currently all
+defined inside the config files.
 
-Then, when creating the model from cn_dpm, we could convert this `HParams` object into
-a dict with either `hparams.to_dict()` or `dataclasses.asdict(hparams)`, and then pass
-the dict to the constructor, just as before.
-
-@lebrice The reason I think this is a good idea is that it would make it much
+@lebrice The reason I think this is a good idea is that it makes it much
 easier to see what the hyper-parameters are, and also make it easier for others to
 reuse/extend this model / method and inherit their hyper-parameters.
-
-NOTE: (@lebrice) You can (and might probably have to) create multiple Config
-dataclasses, one for each group of related parameters! For example, one dataclass for
-the `OptimizerConfig`, another for the `TrainConfig`, etc etc. These config classes
-can also be nested within a larger `ModelConfig` (or something similar) by using them
-as a field of the parent class.
-
-Actually, funily enough, I think I started doing this myself a while back! You can use
-this as inspiration if you want:
-https://github.com/lebrice/SimpleParsing/blob/master/test/utils/test_flattened.py
 """
 from dataclasses import dataclass
 from simple_parsing.helpers import list_field, field
