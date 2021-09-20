@@ -126,12 +126,11 @@ class CNDPM(Method, target_setting=ContinualSLSetting):
         return self.target_setting.Actions(y_pred)
 
     @classmethod
-    def add_argparse_args(cls, parser: ArgumentParser, dest: str = None) -> None:
+    def add_argparse_args(cls, parser: ArgumentParser) -> None:
         """Add the command-line arguments for this Method to the given parser. """
-        prefix = dest + "." if dest else ""
-        parser.add_arguments(HParams, f"{prefix}hparams")
+        parser.add_arguments(HParams, "hparams")
         parser.add_argument(
-            f"--{prefix}load_path",
+            "--load_path",
             type=str,
             default=None,
             help="If given, the HyperParameters are read from the given file instead of from the command-line."
